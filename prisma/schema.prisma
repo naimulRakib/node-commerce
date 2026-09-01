@@ -1,0 +1,659 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// B2C E-COMMERCE DATABASE SCHEMA
+// Designed to BCNF/4NF — Covers: ER Modelling, Normalization, Functional
+// Dependencies, Keys, Constraints, B-Tree Indexes, Referential Integrity.
+// =============================================================================
+
+// ─── CATEGORY ─────────────────────────────────────────────────────────────────
+// Strong Entity. Supports self-referencing hierarchy (adjacency list pattern)
+// so we can model: Electronics > Phones > Smartphones.
+// Self-join: parent_category_id is a FK to category_id (same table).
+// FD: category_id → name, parent_category_id  ∴ in BCNF.
+model Category {
+  category_id        Int        @id @default(autoincrement())
+  name               String     @db.VarChar(120)
+  parent_category_id Int?
+  parent             Category?  @relation("CategoryHierarchy", fields: [parent_category_id], references: [category_id], onDelete: SetNull)
+  children           Category[] @relation("CategoryHierarchy")
+  updated_at         DateTime   @default(now()) @updatedAt
+
+  products Product[]
+
+  @@index([parent_category_id], name: "idx_category_parent")
+  @@map("category")
+}
+
+// ─── PRODUCT ──────────────────────────────────────────────────────────────────
+// Strong Entity. Category moved here from product_variant (2NF fix).
+// FD: product_id → name, product_code, base_price, category_id  ∴ BCNF.
+model Product {
+  product_id   Int       @id @default(autoincrement())
+  category_id  Int?
+  category     Category? @relation(fields: [category_id], references: [category_id], onDelete: SetNull)
+  name         String    @db.VarChar(200)
+  product_code String    @unique @db.VarChar(60)
+  description  String?   @db.Text
+  base_price   Decimal   @db.Decimal(12, 2)
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @default(now()) @updatedAt
+
+  variants        ProductVariant[]
+  inventory       Inventory[]
+  reviews         Review[]
+  order_items     OrderItem[]
+  return_requests ReturnRequest[]
+  cart_items      CartItem[]
+  wishlist_items  WishlistItem[]
+
+  @@index([category_id], name: "idx_product_category")
+  @@map("product")
+}
+
+// ─── PRODUCT_VARIANT ──────────────────────────────────────────────────────────
+// Weak Entity (depends on Product). Represents a specific color/size combo.
+// category_id removed (was a 2NF violation — category belongs to product, not variant).
+// price_override: NULL means "use product.base_price".
+// FD: variant_code → product_id, color, size, sku  ∴ BCNF.
+model ProductVariant {
+  variant_code   String  @id @db.VarChar(60)
+  product_id     Int
+  product        Product @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+  color          String? @db.VarChar(40)
+  size           String? @db.VarChar(20)
+  sku            String  @unique @db.VarChar(60)
+  price_override Decimal? @db.Decimal(12, 2) // NULL = use product base_price
+  weight_grams   Int?
+  quantity       Int     @default(0)
+  created_at     DateTime @default(now())
+
+  media             Media[]
+  variant_inventory VariantInventory[]
+  cart_items        CartItem[]
+  order_items       OrderItem[]
+  wishlist_items    WishlistItem[]
+
+  @@index([product_id], name: "idx_product_variant_product")
+  @@map("product_variant")
+}
+
+// ─── MEDIA ────────────────────────────────────────────────────────────────────
+// Weak Entity (depends on ProductVariant). 1:N relationship.
+// A variant HAS MANY media assets (images/videos).
+// FD: media_no → variant_code, image_url, video_url  ∴ BCNF.
+model Media {
+  media_no     Int            @id @default(autoincrement())
+  variant_code String         @db.VarChar(60)
+  variant      ProductVariant @relation(fields: [variant_code], references: [variant_code], onDelete: Cascade)
+  image_url    String?        @db.VarChar(500)
+  video_url    String?        @db.VarChar(500)
+  description  String?        @db.VarChar(300)
+  is_primary   Boolean        @default(false)
+  sort_order   Int            @default(0)
+
+  @@index([variant_code], name: "idx_media_variant")
+  @@map("media")
+}
+
+// ─── WAREHOUSE ────────────────────────────────────────────────────────────────
+// Strong Entity. Enhanced with proper address fields (1NF — city alone was insufficient).
+// FD: warehouse_no → name, city, address_line, country  ∴ BCNF.
+model Warehouse {
+  warehouse_no Int     @id @default(autoincrement())
+  name         String  @db.VarChar(120)
+  address_line String? @db.VarChar(200)
+  city         String? @db.VarChar(80)
+  district     String? @db.VarChar(80)
+  country      String  @default("Bangladesh") @db.VarChar(80)
+  capacity     Int?
+  is_active    Boolean @default(true)
+
+  inventory         Inventory[]
+  variant_inventory VariantInventory[]
+
+  @@map("warehouse")
+}
+
+// ─── INVENTORY ────────────────────────────────────────────────────────────────
+// Aggregate product-level stock per warehouse.
+// Composite candidate key: (warehouse_no, product_id) → quantity.
+// FD: (warehouse_no, product_id) → quantity, reorder_level  ∴ BCNF.
+// "record_level" renamed to "reorder_level" (semantic correction).
+model Inventory {
+  inventory_id  Int       @id @default(autoincrement())
+  warehouse_no  Int
+  warehouse     Warehouse @relation(fields: [warehouse_no], references: [warehouse_no], onDelete: Cascade)
+  product_id    Int
+  product       Product   @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+  quantity      Int       @default(0)
+  reorder_level Int?
+  last_updated  DateTime  @default(now()) @updatedAt
+
+  @@unique([warehouse_no, product_id], name: "uq_inventory_warehouse_product")
+  @@index([warehouse_no], name: "idx_inventory_warehouse")
+  @@index([product_id], name: "idx_inventory_product")
+  @@map("inventory")
+}
+
+// ─── VARIANT_INVENTORY (NEW) ──────────────────────────────────────────────────
+// Per-variant stock tracking. Answers: "How many Red XL are in Warehouse 2?"
+// The original schema couldn't answer this — it only tracked product-level stock.
+// Composite candidate key: (variant_code, warehouse_no) → quantity  ∴ BCNF.
+model VariantInventory {
+  id           Int            @id @default(autoincrement())
+  variant_code String         @db.VarChar(60)
+  variant      ProductVariant @relation(fields: [variant_code], references: [variant_code], onDelete: Cascade)
+  warehouse_no Int
+  warehouse    Warehouse      @relation(fields: [warehouse_no], references: [warehouse_no], onDelete: Cascade)
+  quantity     Int            @default(0)
+  reorder_level Int?
+  last_updated DateTime       @default(now()) @updatedAt
+
+  @@unique([variant_code, warehouse_no], name: "uq_variant_inventory")
+  @@index([variant_code], name: "idx_variant_inventory_variant")
+  @@index([warehouse_no], name: "idx_variant_inventory_warehouse")
+  @@map("variant_inventory")
+}
+
+// ─── CUSTOMER ─────────────────────────────────────────────────────────────────
+// Strong Entity. payment_method removed (was 1NF violation — multiple values
+// in one field). Moved to customer_payment_method (separate table, 1NF fix).
+// FD: customer_id → email, name, phone  ∴ BCNF.
+// FD: email → customer_id  (super key, so this is fine — BCNF holds).
+model Customer {
+  customer_id   Int      @id @default(autoincrement())
+  name          String   @db.VarChar(120)
+  phone         String?  @db.VarChar(20)
+  email         String   @unique @db.VarChar(150)
+  password_hash String   @db.VarChar(255)
+  is_verified   Boolean  @default(false)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+
+  profile          Profile?
+  wallet           Wallet?
+  addresses        Address[]
+  payment_methods  CustomerPaymentMethod[]
+  cart             Cart?
+  orders           CustomerOrder[]
+  reviews          Review[]
+  referrals        Referral[]
+  support_tickets  SupportTicket[]
+  notifications    Notification[]
+  wishlists        Wishlist[]
+
+  @@map("customer")
+}
+
+// ─── PROFILE (1:1 with Customer) ──────────────────────────────────────────────
+// Structurally weak entity (depends on Customer for identity/meaning).
+// present_address removed — proper address table used instead.
+// FD: profile_id → customer_id, full_name, gender  ∴ BCNF.
+model Profile {
+  profile_id    Int       @id @default(autoincrement())
+  customer_id   Int       @unique
+  customer      Customer  @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  full_name     String?   @db.VarChar(150)
+  date_of_birth DateTime? @db.Date
+  gender        String?   @db.VarChar(20)
+  image_url     String?   @db.VarChar(500)
+  updated_at    DateTime  @default(now()) @updatedAt
+
+  @@map("profile")
+}
+
+// ─── ADDRESS (NEW) ────────────────────────────────────────────────────────────
+// Replaces present_address in Profile. Supports multiple addresses per customer.
+// Properly structured (1NF) — each field is atomic.
+// Used for shipping_address on CustomerOrder (snapshot of address at order time).
+// FD: address_id → customer_id, address_line1, city, country  ∴ BCNF.
+model Address {
+  address_id    Int      @id @default(autoincrement())
+  customer_id   Int
+  customer      Customer @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  label         String   @default("home") @db.VarChar(40) // home, work, other
+  address_line1 String   @db.VarChar(200)
+  address_line2 String?  @db.VarChar(200)
+  city          String   @db.VarChar(80)
+  district      String?  @db.VarChar(80)
+  postal_code   String?  @db.VarChar(20)
+  country       String   @default("Bangladesh") @db.VarChar(80)
+  is_default    Boolean  @default(false)
+  created_at    DateTime @default(now())
+
+  orders CustomerOrder[]
+
+  @@index([customer_id], name: "idx_address_customer")
+  @@map("address")
+}
+
+// ─── WALLET (1:1 with Customer) ───────────────────────────────────────────────
+// bank_adress (typo) corrected to bank_account.
+// FD: wallet_id → customer_id, balance, bank_account  ∴ BCNF.
+model Wallet {
+  wallet_id    Int      @id @default(autoincrement())
+  customer_id  Int      @unique
+  customer     Customer @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  balance      Decimal  @default(0) @db.Decimal(12, 2)
+  bank_account String?  @db.VarChar(200) // Corrected from "bank_adress"
+  updated_at   DateTime @default(now()) @updatedAt
+
+  @@map("wallet")
+}
+
+// ─── CUSTOMER_PAYMENT_METHOD (NEW) ────────────────────────────────────────────
+// 1NF fix: customer.payment_method was a single VARCHAR that could hold
+// multiple values ("card,bkash"). This table gives each method its own row.
+// Supports: card, bkash, nagad, rocket, wallet, cod.
+// FD: id → customer_id, type, provider, token  ∴ BCNF.
+model CustomerPaymentMethod {
+  id          Int      @id @default(autoincrement())
+  customer_id Int
+  customer    Customer @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  type        String   @db.VarChar(40) // card, bkash, nagad, wallet, cod
+  provider    String?  @db.VarChar(80)
+  token       String?  @db.VarChar(255) // masked/tokenized reference
+  is_default  Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  @@index([customer_id], name: "idx_payment_method_customer")
+  @@map("customer_payment_method")
+}
+
+// ─── REFERRAL ─────────────────────────────────────────────────────────────────
+// N:1 to Customer (one customer refers many). 
+// FD: referral_id → referrer_customer_id, code, status  ∴ BCNF.
+// FD: code → referral_id (alternate key — BCNF holds).
+model Referral {
+  referral_id          Int      @id @default(autoincrement())
+  referrer_customer_id Int
+  referrer             Customer @relation(fields: [referrer_customer_id], references: [customer_id], onDelete: Cascade)
+  code                 String   @unique @db.VarChar(40)
+  referred_email       String?  @db.VarChar(150)
+  status               String   @default("pending") @db.VarChar(30) // pending, completed, expired
+  reward_amount        Decimal  @default(0) @db.Decimal(10, 2)
+  created_at           DateTime @default(now())
+
+  @@index([referrer_customer_id], name: "idx_referral_referrer")
+  @@map("referral")
+}
+
+// ─── SUPPORT_TICKET ───────────────────────────────────────────────────────────
+// N:1 to Customer. Added body (message content was missing in original).
+// FD: ticket_id → customer_id, subject, status, priority  ∴ BCNF.
+model SupportTicket {
+  ticket_id   Int      @id @default(autoincrement())
+  customer_id Int
+  customer    Customer @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  subject     String   @db.VarChar(200)
+  body        String?  @db.Text
+  status      String   @default("open") @db.VarChar(30) // open, in_progress, resolved, closed
+  priority    String   @default("normal") @db.VarChar(20) // low, normal, high, urgent
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+
+  @@index([customer_id], name: "idx_support_ticket_customer")
+  @@map("support_ticket")
+}
+
+// ─── NOTIFICATION ─────────────────────────────────────────────────────────────
+// N:1 to Customer. Added is_read for notification state management.
+// FD: notification_id → customer_id, type, message, sent_at  ∴ BCNF.
+model Notification {
+  notification_id Int      @id @default(autoincrement())
+  customer_id     Int
+  customer        Customer @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  type            String?  @db.VarChar(40) // order_update, promo, system, refund
+  message         String?  @db.VarChar(500)
+  is_read         Boolean  @default(false)
+  sent_at         DateTime @default(now())
+
+  @@index([customer_id], name: "idx_notifications_customer")
+  @@map("notification")
+}
+
+// ─── REVIEW ───────────────────────────────────────────────────────────────────
+// M:N-ish between Customer and Product (each review is one row).
+// is_verified: true only if customer actually purchased this product.
+// rating CHECK (1-5) enforced in DB.
+// FD: review_id → product_id, customer_id, rating  ∴ BCNF.
+model Review {
+  review_id   Int       @id @default(autoincrement())
+  product_id  Int
+  product     Product   @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+  customer_id Int?
+  customer    Customer? @relation(fields: [customer_id], references: [customer_id], onDelete: SetNull)
+  rating      Int // 1-5, enforced by CHECK constraint added via migration
+  comment     String?   @db.VarChar(1000)
+  is_verified Boolean   @default(false)
+  created_at  DateTime  @default(now())
+
+  @@index([product_id, rating], name: "idx_review_product_rating")
+  @@index([customer_id], name: "idx_review_customer")
+  @@map("review")
+}
+
+// ─── CART (1:1 with Customer) ─────────────────────────────────────────────────
+// One active cart per customer. The quantity column is removed from the
+// original (was misleading — quantity lives on cart_item, not cart).
+// FD: cart_id → customer_id, created_at  ∴ BCNF.
+model Cart {
+  cart_id     Int      @id @default(autoincrement())
+  customer_id Int      @unique
+  customer    Customer @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+
+  items CartItem[]
+
+  @@map("cart")
+}
+
+// ─── CART_ITEM ────────────────────────────────────────────────────────────────
+// M:N junction: Cart ↔ ProductVariant.
+// Now properly links to variant_code (specific color/size), not just product_id.
+// Composite unique: (cart_id, variant_code) prevents duplicate items.
+// FD: cart_item_id → cart_id, product_id, variant_code, quantity  ∴ BCNF.
+model CartItem {
+  cart_item_id Int             @id @default(autoincrement())
+  cart_id      Int
+  cart         Cart            @relation(fields: [cart_id], references: [cart_id], onDelete: Cascade)
+  product_id   Int
+  product      Product         @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+  variant_code String?         @db.VarChar(60)
+  variant      ProductVariant? @relation(fields: [variant_code], references: [variant_code], onDelete: SetNull)
+  quantity     Int             @default(1)
+  added_at     DateTime        @default(now())
+
+  @@unique([cart_id, variant_code], name: "uq_cart_item")
+  @@index([cart_id], name: "idx_cart_item_cart")
+  @@index([product_id], name: "idx_cart_item_product")
+  @@map("cart_item")
+}
+
+// ─── COUPON ───────────────────────────────────────────────────────────────────
+// discount_pt renamed and split into discount_type + discount_value (clearer semantics).
+// Supports percentage discounts AND fixed amount discounts.
+// usage_limit + usage_count for single-use or limited coupons.
+// FD: code → discount_type, discount_value, min_spend, expiry_date  ∴ BCNF.
+model Coupon {
+  code           String    @id @db.VarChar(40)
+  discount_type  String    @default("percentage") @db.VarChar(20) // percentage, fixed
+  discount_value Decimal   @db.Decimal(10, 2)
+  min_spend      Decimal   @default(0) @db.Decimal(10, 2)
+  max_discount   Decimal?  @db.Decimal(10, 2)
+  expiry_date    DateTime? @db.Date
+  usage_limit    Int?
+  usage_count    Int       @default(0)
+  is_active      Boolean   @default(true)
+  created_at     DateTime  @default(now())
+
+  orders CustomerOrder[]
+
+  @@map("coupon")
+}
+
+// ─── COURIER ──────────────────────────────────────────────────────────────────
+// coverage_area (a free-text multi-value field) removed — 1NF violation.
+// Replaced by CourierCoverage (separate table, one row per district).
+// FD: courier_id → name, phone, email  ∴ BCNF.
+model Courier {
+  courier_id Int     @id @default(autoincrement())
+  name       String  @db.VarChar(120)
+  phone      String? @db.VarChar(20)
+  email      String? @db.VarChar(150)
+  is_active  Boolean @default(true)
+
+  coverage_areas CourierCoverage[]
+  orders         CustomerOrder[]
+  shipments      Shipment[]
+
+  @@map("courier")
+}
+
+// ─── COURIER_COVERAGE (NEW) ───────────────────────────────────────────────────
+// 1NF fix for courier.coverage_area.
+// Each row = one district/city the courier covers.
+// Composite candidate key: (courier_id, district).
+// FD: (courier_id, district) → city  ∴ BCNF.
+model CourierCoverage {
+  id         Int     @id @default(autoincrement())
+  courier_id Int
+  courier    Courier @relation(fields: [courier_id], references: [courier_id], onDelete: Cascade)
+  district   String  @db.VarChar(80)
+  city       String? @db.VarChar(80)
+
+  @@unique([courier_id, district], name: "uq_courier_coverage")
+  @@index([courier_id], name: "idx_courier_coverage")
+  @@map("courier_coverage")
+}
+
+// ─── CUSTOMER_ORDER ───────────────────────────────────────────────────────────
+// Central transactional entity. Added shipping_address_id (was missing).
+// total_amount is a controlled denormalization: derived from order_items
+// but stored for performance. In strict 3NF this would be a view.
+// subtotal + discount_amount + shipping_fee = total_amount (enforced by app).
+// ON DELETE RESTRICT on customer_id: preserves audit trail.
+// FD: order_id → customer_id, courier_id, coupon_code, total_amount  ∴ BCNF.
+model CustomerOrder {
+  order_id            Int       @id @default(autoincrement())
+  customer_id         Int
+  customer            Customer  @relation(fields: [customer_id], references: [customer_id], onDelete: Restrict)
+  courier_id          Int?
+  courier             Courier?  @relation(fields: [courier_id], references: [courier_id], onDelete: SetNull)
+  coupon_code         String?   @db.VarChar(40)
+  coupon              Coupon?   @relation(fields: [coupon_code], references: [code], onDelete: SetNull)
+  shipping_address_id Int?
+  shipping_address    Address?  @relation(fields: [shipping_address_id], references: [address_id], onDelete: SetNull)
+  order_date          DateTime  @default(now())
+  status              String    @default("pending") @db.VarChar(30) // pending, confirmed, processing, shipped, delivered, cancelled
+  subtotal            Decimal   @default(0) @db.Decimal(12, 2)
+  discount_amount     Decimal   @default(0) @db.Decimal(12, 2)
+  shipping_fee        Decimal   @default(0) @db.Decimal(10, 2)
+  total_amount        Decimal   @default(0) @db.Decimal(12, 2) // denormalized for performance
+  notes               String?   @db.VarChar(500)
+
+  items           OrderItem[]
+  payments        Payment[]
+  invoice         Invoice?
+  return_requests ReturnRequest[]
+  shipment        Shipment?
+
+  @@index([customer_id], name: "idx_order_customer")
+  @@index([courier_id], name: "idx_order_courier")
+  @@index([coupon_code], name: "idx_order_coupon")
+  @@map("customer_order")
+}
+
+// ─── ORDER_ITEM ───────────────────────────────────────────────────────────────
+// M:N junction: CustomerOrder ↔ ProductVariant.
+// Now also stores variant_code (specific variant ordered).
+// unit_price and line_total are SNAPSHOTS at time of order (price may change later).
+// This is correct DB design — never reference live price for historical orders.
+// FD: order_item_id → order_id, product_id, variant_code, quantity, unit_price  ∴ BCNF.
+model OrderItem {
+  order_item_id Int             @id @default(autoincrement())
+  order_id      Int
+  order         CustomerOrder   @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  product_id    Int
+  product       Product         @relation(fields: [product_id], references: [product_id], onDelete: Restrict)
+  variant_code  String?         @db.VarChar(60)
+  variant       ProductVariant? @relation(fields: [variant_code], references: [variant_code], onDelete: SetNull)
+  quantity      Int             @default(1)
+  unit_price    Decimal         @db.Decimal(12, 2) // price at time of order
+  line_total    Decimal         @db.Decimal(12, 2) // quantity * unit_price
+
+  @@index([order_id], name: "idx_order_item_order")
+  @@index([product_id], name: "idx_order_item_product")
+  @@map("order_item")
+}
+
+// ─── PAYMENT ──────────────────────────────────────────────────────────────────
+// N:1 to CustomerOrder (one order may have multiple payments, e.g., partial).
+// paid_at added (was missing in original).
+// txid has UNIQUE constraint — prevents duplicate transaction records.
+// ON DELETE CASCADE: payment records cascade with order.
+// FD: payment_id → order_id, txid, amount, method, status  ∴ BCNF.
+model Payment {
+  payment_id Int           @id @default(autoincrement())
+  order_id   Int
+  order      CustomerOrder @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  txid       String        @unique @db.VarChar(100)
+  amount     Decimal       @db.Decimal(12, 2)
+  method     String        @db.VarChar(40) // card, bkash, nagad, wallet, cod
+  status     String        @default("pending") @db.VarChar(30) // pending, success, failed, refunded
+  paid_at    DateTime?
+  created_at DateTime      @default(now())
+
+  @@index([order_id], name: "idx_payment_order")
+  @@map("payment")
+}
+
+// ─── INVOICE (1:1 with CustomerOrder) ─────────────────────────────────────────
+// One invoice per order. tax_rate added for proper tax calculation transparency.
+// FD: invoice_id → order_id, issued_at, tax_amount, status  ∴ BCNF.
+model Invoice {
+  invoice_id Int           @id @default(autoincrement())
+  order_id   Int           @unique
+  order      CustomerOrder @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  issued_at  DateTime      @default(now())
+  tax_amount Decimal       @default(0) @db.Decimal(10, 2)
+  tax_rate   Decimal       @default(0) @db.Decimal(5, 2) // e.g., 15.00 for 15% VAT
+  status     String        @default("issued") @db.VarChar(30) // issued, void
+
+  @@map("invoice")
+}
+
+// ─── SHIPMENT (NEW) ───────────────────────────────────────────────────────────
+// 1:1 with CustomerOrder. Tracks the full delivery lifecycle.
+// tracking_number allows customers to track their delivery externally.
+// Separated from CustomerOrder to keep the order table clean (SRP principle).
+// FD: shipment_id → order_id, tracking_number, status, delivered_at  ∴ BCNF.
+model Shipment {
+  shipment_id        Int           @id @default(autoincrement())
+  order_id           Int           @unique
+  order              CustomerOrder @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  courier_id         Int?
+  courier            Courier?      @relation(fields: [courier_id], references: [courier_id], onDelete: SetNull)
+  tracking_number    String?       @db.VarChar(100)
+  status             String        @default("preparing") @db.VarChar(30) // preparing, in_transit, out_for_delivery, delivered, failed
+  estimated_delivery DateTime?
+  dispatched_at      DateTime?
+  delivered_at       DateTime?
+
+  @@index([courier_id], name: "idx_shipment_courier")
+  @@map("shipment")
+}
+
+// ─── RETURN_REQUEST ───────────────────────────────────────────────────────────
+// N:1 to CustomerOrder. Tracks return/exchange requests.
+// ON DELETE RESTRICT on product_id — preserves return history.
+// FD: return_id → order_id, product_id, status, reason  ∴ BCNF.
+model ReturnRequest {
+  return_id      Int           @id @default(autoincrement())
+  order_id       Int
+  order          CustomerOrder @relation(fields: [order_id], references: [order_id], onDelete: Cascade)
+  product_id     Int
+  product        Product       @relation(fields: [product_id], references: [product_id], onDelete: Restrict)
+  requested_time DateTime      @default(now())
+  reason         String?       @db.VarChar(300)
+  status         String        @default("requested") @db.VarChar(30) // requested, approved, rejected, completed
+
+  refund Refund?
+
+  @@index([order_id], name: "idx_return_request_order")
+  @@index([product_id], name: "idx_return_request_product")
+  @@map("return_request")
+}
+
+// ─── REFUND (1:1 with ReturnRequest) ─────────────────────────────────────────
+// One refund per return request.
+// FD: refund_id → return_id, amount, status, method  ∴ BCNF.
+model Refund {
+  refund_id      Int           @id @default(autoincrement())
+  return_id      Int           @unique
+  return_request ReturnRequest @relation(fields: [return_id], references: [return_id], onDelete: Cascade)
+  amount         Decimal       @db.Decimal(12, 2)
+  method         String?       @db.VarChar(40)
+  status         String        @default("pending") @db.VarChar(30) // pending, processed, failed
+  processed_at   DateTime?
+
+  @@map("refund")
+}
+
+// ─── WISHLIST (1:1 with Customer) (NEW) ───────────────────────────────────────
+// Standard B2C feature. One wishlist per customer.
+// FD: wishlist_id → customer_id  ∴ BCNF.
+model Wishlist {
+  wishlist_id Int      @id @default(autoincrement())
+  customer_id Int      @unique
+  customer    Customer @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  created_at  DateTime @default(now())
+
+  items WishlistItem[]
+
+  @@map("wishlist")
+}
+
+// ─── WISHLIST_ITEM (NEW) ──────────────────────────────────────────────────────
+// M:N junction: Wishlist ↔ ProductVariant.
+// Composite unique on (wishlist_id, variant_code) prevents duplicates.
+// FD: id → wishlist_id, product_id, variant_code  ∴ BCNF.
+model WishlistItem {
+  id           Int             @id @default(autoincrement())
+  wishlist_id  Int
+  wishlist     Wishlist        @relation(fields: [wishlist_id], references: [wishlist_id], onDelete: Cascade)
+  product_id   Int
+  product      Product         @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+  variant_code String?         @db.VarChar(60)
+  variant      ProductVariant? @relation(fields: [variant_code], references: [variant_code], onDelete: SetNull)
+  added_at     DateTime        @default(now())
+
+  @@unique([wishlist_id, variant_code], name: "uq_wishlist_item")
+  @@map("wishlist_item")
+}
+
+// ─── AUDIT_LOG (NEW) ──────────────────────────────────────────────────────────
+// Tracks all significant state changes for compliance and debugging.
+// old_data / new_data stored as JSON snapshots.
+// Non-destructive: records are never deleted from audit_log.
+// FD: log_id → table_name, record_id, action, changed_at  ∴ BCNF.
+model AuditLog {
+  log_id     Int      @id @default(autoincrement())
+  table_name String   @db.VarChar(60)
+  record_id  Int
+  action     String   @db.VarChar(20) // INSERT, UPDATE, DELETE
+  changed_by Int? // customer_id or admin id
+  old_data   Json?
+  new_data   Json?
+  changed_at DateTime @default(now())
+
+  @@index([table_name, record_id], name: "idx_audit_log_record")
+  @@map("audit_log")
+}
+
+// ─── ADMIN_USER ───────────────────────────────────────────────────────────────
+// Separate admin authentication entity — clean SRP separation from Customer.
+// Admins manage orders, products, couriers; they are NOT customers.
+// FD: admin_id → email, name, role  ∴ BCNF.
+// FD: email → admin_id (alternate key — BCNF holds).
+model AdminUser {
+  admin_id      Int      @id @default(autoincrement())
+  email         String   @unique @db.VarChar(150)
+  password_hash String   @db.VarChar(255)
+  name          String   @db.VarChar(120)
+  role          String   @default("admin") @db.VarChar(30) // admin, super_admin
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+
+  @@map("admin_user")
+}
