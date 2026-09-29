@@ -61,7 +61,10 @@ CREATE TABLE customer (
     name            VARCHAR(120) NOT NULL,
     phone           VARCHAR(20),
     email           VARCHAR(150) NOT NULL UNIQUE,
-    payment_method  VARCHAR(40)
+    payment_method  VARCHAR(40),
+    password_hash   VARCHAR(255),
+    is_verified     BOOLEAN DEFAULT false,
+    is_active       BOOLEAN DEFAULT true
 );
 
 -- profile: represents Customer (1:1)
@@ -148,7 +151,7 @@ CREATE TABLE cart_item (
 );
 
 -- ---------- Coupon / Courier -------------------------------------------
-
+-- natural key , dont need primary key
 CREATE TABLE coupon (
     code            VARCHAR(40) PRIMARY KEY,
     min_spend       NUMERIC(10,2) DEFAULT 0,

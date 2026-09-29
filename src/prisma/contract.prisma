@@ -1,0 +1,500 @@
+// use prisma-8
+// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.
+
+model Customer {
+  customerId                 Int                     @id(map: "customer_pkey") @default(autoincrement()) @map("customer_id")
+  name                       VarChar(120)
+  phone                      VarChar(20)?
+  email                      VarChar(150)            @unique(map: "customer_email_key")
+  paymentMethod              VarChar(40)?            @map("payment_method")
+  passwordHash               VarChar(255)?           @map("password_hash")
+  isVerified                 Boolean?                @default(false) @map("is_verified")
+  isActive                   Boolean?                @default(true) @map("is_active")
+  addresses                  Address[]
+  carts                      Cart[]
+  customerOrders             CustomerOrder[]
+  customerPaymentMethods     CustomerPaymentMethod[]
+  notifications              Notification[]
+  notificationsNotifications Notifications[]
+  profile                    Profile?
+  referrals                  Referral[]
+  reviews                    Review[]
+  supportTickets             SupportTicket[]
+  wallet                     Wallet?
+  wishlist                   Wishlist?
+
+  @@map("customer")
+}
+
+model Address {
+  addressId    Int           @id(map: "address_pkey") @default(autoincrement()) @map("address_id")
+  customerId   Int           @map("customer_id")
+  label        VarChar(40)   @default("home")
+  addressLine1 VarChar(200)  @map("address_line1")
+  addressLine2 VarChar(200)? @map("address_line2")
+  city         VarChar(80)
+  district     VarChar(80)?
+  postalCode   VarChar(20)?  @map("postal_code")
+  country      VarChar(80)   @default("Bangladesh")
+  isDefault    Boolean       @default(false) @map("is_default")
+  createdAt    Timestamp     @default(now()) @map("created_at")
+  customer     Customer      @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "address_customer_id_fkey")
+
+  @@index([customerId], map: "idx_address_customer")
+  @@map("address")
+}
+
+model Admin {
+  adminId      Int          @id(map: "admin_pkey") @default(autoincrement()) @map("admin_id")
+  name         VarChar(120)
+  email        VarChar(150) @unique(map: "admin_email_key")
+  passwordHash VarChar(255) @map("password_hash")
+  role         VarChar(30)  @default("admin")
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    Timestamp    @default(now()) @map("created_at")
+
+  @@map("admin")
+}
+
+model AuditLog {
+  logId     Int         @id(map: "audit_log_pkey") @default(autoincrement()) @map("log_id")
+  tableName VarChar(60) @map("table_name")
+  recordId  Int         @map("record_id")
+  action    VarChar(20)
+  changedBy Int?        @map("changed_by")
+  oldData   Jsonb?      @map("old_data")
+  newData   Jsonb?      @map("new_data")
+  changedAt Timestamp   @default(now()) @map("changed_at")
+
+  @@index([tableName, recordId], map: "idx_audit_log_record")
+  @@map("audit_log")
+}
+
+model Cart {
+  cartId     Int        @id(map: "cart_pkey") @default(autoincrement()) @map("cart_id")
+  customerId Int        @map("customer_id")
+  quantity   Int        @default(0)
+  createdAt  Timestamp  @default(now()) @map("created_at")
+  updatedAt  Timestamp  @default(now()) @map("updated_at")
+  cartItems  CartItem[]
+  customer   Customer   @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "cart_customer_id_fkey")
+
+  @@index([customerId], map: "idx_cart_customer")
+  @@map("cart")
+}
+
+model Category {
+  categoryId       Int              @id(map: "category_pkey") @default(autoincrement()) @map("category_id")
+  name             VarChar(120)
+  updatedAt        Timestamp        @default(now()) @map("updated_at")
+  parentCategoryId Int?             @map("parent_category_id")
+  products         Product[]
+  productVariants  ProductVariant[]
+  parentCategory   Category?        @relation(name: "category_parent_category_id_fkey", fields: [parentCategoryId], references: [categoryId], onDelete: SetNull, map: "category_parent_category_id_fkey", index: false)
+  categories       Category[]       @relation(name: "category_parent_category_id_fkey")
+
+  @@map("category")
+}
+
+model Product {
+  productId       Int              @id(map: "product_pkey") @default(autoincrement()) @map("product_id")
+  name            VarChar(200)
+  productCode     VarChar(60)      @unique(map: "product_product_code_key") @map("product_code")
+  price           Numeric(12, 2)
+  stockQty        Int              @default(0) @map("stock_qty")
+  basePrice       Numeric(12, 2)?  @map("base_price")
+  categoryId      Int?             @map("category_id")
+  description     String?
+  imageUrl        VarChar(500)?    @map("image_url")
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       Timestamp        @default(now()) @map("created_at")
+  updatedAt       Timestamp        @default(now()) @map("updated_at")
+  cartItems       CartItem[]
+  inventories     Inventory[]
+  orderItems      OrderItem[]
+  productVariants ProductVariant[]
+  returnRequests  ReturnRequest[]
+  reviews         Review[]
+  wishlistItems   WishlistItem[]
+  category        Category?        @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull, map: "product_category_id_fkey")
+
+  @@index([categoryId], map: "idx_product_category")
+  @@index([createdAt], map: "idx_product_created_at")
+  @@index([isActive], map: "idx_product_is_active")
+  @@map("product")
+}
+
+model CartItem {
+  cartItemId  Int          @id(map: "cart_item_pkey") @default(autoincrement()) @map("cart_item_id")
+  cartId      Int          @map("cart_id")
+  productId   Int          @map("product_id")
+  quantity    Int          @default(1)
+  lineNo      Int?         @map("line_no")
+  addedAt     Timestamp    @default(now()) @map("added_at")
+  variantCode VarChar(60)? @map("variant_code")
+  cart        Cart         @relation(fields: [cartId], references: [cartId], onDelete: Cascade, map: "cart_item_cart_id_fkey")
+  product     Product      @relation(fields: [productId], references: [productId], onDelete: Cascade, map: "cart_item_product_id_fkey")
+
+  @@unique([cartId, productId], map: "cart_item_cart_id_product_id_key")
+  @@index([cartId], map: "idx_cart_item_cart")
+  @@index([productId], map: "idx_cart_item_product")
+  @@map("cart_item")
+}
+
+model Coupon {
+  code           VarChar(40)     @id(map: "coupon_pkey")
+  minSpend       Numeric(10, 2)? @default(0) @map("min_spend")
+  expiryDate     Date?           @map("expiry_date")
+  discountPt     Numeric(5, 2)   @map("discount_pt")
+  isActive       Boolean         @default(true) @map("is_active")
+  usageCount     Int             @default(0) @map("usage_count")
+  usageLimit     Int?            @map("usage_limit")
+  discountType   VarChar(20)     @default("percentage") @map("discount_type")
+  discountValue  Numeric(10, 2)  @default(0) @map("discount_value")
+  maxDiscount    Numeric(10, 2)? @map("max_discount")
+  customerOrders CustomerOrder[]
+
+  @@map("coupon")
+}
+
+model Courier {
+  courierId        Int               @id(map: "courier_pkey") @default(autoincrement()) @map("courier_id")
+  name             VarChar(120)
+  phone            VarChar(20)?
+  coverageArea     VarChar(150)?     @map("coverage_area")
+  email            VarChar(150)?
+  isActive         Boolean           @default(true) @map("is_active")
+  courierCoverages CourierCoverage[]
+  customerOrders   CustomerOrder[]
+  shipments        Shipment[]
+
+  @@map("courier")
+}
+
+model CourierCoverage {
+  id        Int          @id(map: "courier_coverage_pkey") @default(autoincrement())
+  courierId Int          @map("courier_id")
+  district  VarChar(80)
+  city      VarChar(80)?
+  courier   Courier      @relation(fields: [courierId], references: [courierId], onDelete: Cascade, map: "courier_coverage_courier_id_fkey")
+
+  @@unique([courierId, district], map: "courier_coverage_courier_id_district_key")
+  @@index([courierId], map: "idx_courier_coverage")
+  @@map("courier_coverage")
+}
+
+model CustomerOrder {
+  orderId           Int             @id(map: "customer_order_pkey") @default(autoincrement()) @map("order_id")
+  customerId        Int             @map("customer_id")
+  courierId         Int?            @map("courier_id")
+  couponCode        VarChar(40)?    @map("coupon_code")
+  orderDate         Timestamp       @default(now()) @map("order_date")
+  status            VarChar(30)     @default("pending")
+  totalAmount       Numeric(12, 2)  @default(0) @map("total_amount")
+  shippingAddressId Int?            @map("shipping_address_id")
+  subtotal          Numeric(12, 2)  @default(0)
+  discountAmount    Numeric(12, 2)  @default(0) @map("discount_amount")
+  shippingFee       Numeric(12, 2)  @default(0) @map("shipping_fee")
+  invoice           Invoice?
+  orderItems        OrderItem[]
+  payments          Payment[]
+  returnRequests    ReturnRequest[]
+  shipment          Shipment?
+  coupon            Coupon?         @relation(fields: [couponCode], references: [code], onDelete: SetNull, map: "customer_order_coupon_code_fkey")
+  courier           Courier?        @relation(fields: [courierId], references: [courierId], onDelete: SetNull, map: "customer_order_courier_id_fkey")
+  customer          Customer        @relation(fields: [customerId], references: [customerId], onDelete: Restrict, map: "customer_order_customer_id_fkey")
+
+  @@index([couponCode], map: "idx_order_coupon")
+  @@index([courierId], map: "idx_order_courier")
+  @@index([customerId], map: "idx_order_customer")
+  @@map("customer_order")
+}
+
+model CustomerPaymentMethod {
+  id         Int           @id(map: "customer_payment_method_pkey") @default(autoincrement())
+  customerId Int           @map("customer_id")
+  _type      VarChar(40)   @map("type")
+  provider   VarChar(80)?
+  token      VarChar(255)?
+  isDefault  Boolean       @default(false) @map("is_default")
+  createdAt  Timestamp     @default(now()) @map("created_at")
+  customer   Customer      @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "customer_payment_method_customer_id_fkey")
+
+  @@index([customerId], map: "idx_payment_method_customer")
+  @@map("customer_payment_method")
+}
+
+model Warehouse {
+  warehouseNo        Int                @id(map: "warehouse_pkey") @default(autoincrement()) @map("warehouse_no")
+  name               VarChar(120)
+  city               VarChar(80)?
+  capacity           Int?
+  inventories        Inventory[]
+  variantInventories VariantInventory[]
+
+  @@map("warehouse")
+}
+
+model Inventory {
+  inventoryId Int       @id(map: "inventory_pkey") @default(autoincrement()) @map("inventory_id")
+  warehouseNo Int       @map("warehouse_no")
+  productId   Int       @map("product_id")
+  quantity    Int       @default(0)
+  recordLevel Int?      @map("record_level")
+  lastUpdated Timestamp @default(now()) @map("last_updated")
+  product     Product   @relation(fields: [productId], references: [productId], onDelete: Cascade, map: "inventory_product_id_fkey")
+  warehouse   Warehouse @relation(fields: [warehouseNo], references: [warehouseNo], onDelete: Cascade, map: "inventory_warehouse_no_fkey")
+
+  @@index([productId], map: "idx_inventory_product")
+  @@index([warehouseNo], map: "idx_inventory_warehouse")
+  @@map("inventory")
+}
+
+model Invoice {
+  invoiceId Int             @id(map: "invoice_pkey") @default(autoincrement()) @map("invoice_id")
+  orderId   Int             @unique(map: "invoice_order_id_key") @map("order_id")
+  issuedAt  Timestamp       @default(now()) @map("issued_at")
+  taxAmount Numeric(10, 2)? @default(0) @map("tax_amount")
+  status    VarChar(30)     @default("issued")
+  taxRate   Numeric(5, 2)?  @default(5.0) @map("tax_rate")
+  order     CustomerOrder   @relation(fields: [orderId], references: [orderId], onDelete: Cascade, map: "invoice_order_id_fkey")
+
+  @@map("invoice")
+}
+
+model ProductVariant {
+  variantCode        VarChar(60)        @id(map: "product_variant_pkey") @map("variant_code")
+  productId          Int                @map("product_id")
+  categoryId         Int?               @map("category_id")
+  color              VarChar(40)?
+  sku                VarChar(60)        @unique(map: "product_variant_sku_key")
+  size               VarChar(20)?
+  quantity           Int                @default(0)
+  createdAt          Timestamp          @default(now()) @map("created_at")
+  media              Media[]
+  variantInventories VariantInventory[]
+  wishlistItems      WishlistItem[]
+  category           Category?          @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull, map: "product_variant_category_id_fkey")
+  product            Product            @relation(fields: [productId], references: [productId], onDelete: Cascade, map: "product_variant_product_id_fkey")
+
+  @@index([categoryId], map: "idx_product_variant_category")
+  @@index([productId], map: "idx_product_variant_product")
+  @@map("product_variant")
+}
+
+model Media {
+  mediaNo        Int            @id(map: "media_pkey") @default(autoincrement()) @map("media_no")
+  variantCode    VarChar(60)    @map("variant_code")
+  imageUrl       VarChar(500)?  @map("image_url")
+  videoSnippet   VarChar(500)?  @map("video_snippet")
+  description    VarChar(300)?
+  productVariant ProductVariant @relation(fields: [variantCode], references: [variantCode], onDelete: Cascade, map: "media_variant_code_fkey")
+
+  @@index([variantCode], map: "idx_media_variant")
+  @@map("media")
+}
+
+model Notification {
+  notificationId Int           @id(map: "notification_pkey") @default(autoincrement()) @map("notification_id")
+  customerId     Int           @map("customer_id")
+  _type          VarChar(40)?  @map("type")
+  message        VarChar(500)?
+  isRead         Boolean       @default(false) @map("is_read")
+  sentAt         Timestamp     @default(now()) @map("sent_at")
+  customer       Customer      @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "notification_customer_id_fkey")
+
+  @@index([customerId], map: "idx_notification_customer")
+  @@map("notification")
+}
+
+model Notifications {
+  notificationId Int           @id(map: "notifications_pkey") @default(autoincrement()) @map("notification_id")
+  customerId     Int           @map("customer_id")
+  _type          VarChar(40)?  @map("type")
+  message        VarChar(500)?
+  sentAt         Timestamp     @default(now()) @map("sent_at")
+  customer       Customer      @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "notifications_customer_id_fkey")
+
+  @@index([customerId], map: "idx_notifications_customer")
+  @@map("notifications")
+}
+
+model OrderItem {
+  orderItemId Int            @id(map: "order_item_pkey") @default(autoincrement()) @map("order_item_id")
+  orderId     Int            @map("order_id")
+  productId   Int            @map("product_id")
+  quantity    Int            @default(1)
+  unitPrice   Numeric(12, 2) @map("unit_price")
+  code        VarChar(60)?
+  order       CustomerOrder  @relation(fields: [orderId], references: [orderId], onDelete: Cascade, map: "order_item_order_id_fkey")
+  product     Product        @relation(fields: [productId], references: [productId], onDelete: Restrict, map: "order_item_product_id_fkey")
+
+  @@index([orderId], map: "idx_order_item_order")
+  @@index([productId], map: "idx_order_item_product")
+  @@map("order_item")
+}
+
+model Payment {
+  paymentId Int            @id(map: "payment_pkey") @default(autoincrement()) @map("payment_id")
+  orderId   Int            @map("order_id")
+  txid      VarChar(100)   @unique(map: "payment_txid_key")
+  amount    Numeric(12, 2)
+  method    VarChar(40)
+  status    VarChar(30)    @default("pending")
+  paidAt    Timestamp?     @map("paid_at")
+  order     CustomerOrder  @relation(fields: [orderId], references: [orderId], onDelete: Cascade, map: "payment_order_id_fkey")
+
+  @@index([orderId], map: "idx_payment_order")
+  @@map("payment")
+}
+
+model Profile {
+  profileId      Int           @id(map: "profile_pkey") @default(autoincrement()) @map("profile_id")
+  customerId     Int           @unique(map: "profile_customer_id_key") @map("customer_id")
+  fullName       VarChar(150)? @map("full_name")
+  presentAddress VarChar(250)? @map("present_address")
+  gender         VarChar(20)?
+  imageUrl       VarChar(500)? @map("image_url")
+  customer       Customer      @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "profile_customer_id_fkey")
+
+  @@map("profile")
+}
+
+model Referral {
+  referralId         Int             @id(map: "referral_pkey") @default(autoincrement()) @map("referral_id")
+  referrerCustomerId Int             @map("referrer_customer_id")
+  code               VarChar(40)     @unique(map: "referral_code_key")
+  referredEmail      VarChar(150)?   @map("referred_email")
+  status             VarChar(30)     @default("pending")
+  rewardAmount       Numeric(10, 2)? @default(0) @map("reward_amount")
+  referrerCustomer   Customer        @relation(fields: [referrerCustomerId], references: [customerId], onDelete: Cascade, map: "referral_referrer_customer_id_fkey")
+
+  @@index([referrerCustomerId], map: "idx_referral_referrer")
+  @@map("referral")
+}
+
+model ReturnRequest {
+  returnId      Int           @id(map: "return_request_pkey") @default(autoincrement()) @map("return_id")
+  orderId       Int           @map("order_id")
+  productId     Int           @map("product_id")
+  requestedTime Timestamp     @default(now()) @map("requested_time")
+  reason        VarChar(300)?
+  status        VarChar(30)   @default("requested")
+  refund        Refund?
+  order         CustomerOrder @relation(fields: [orderId], references: [orderId], onDelete: Cascade, map: "return_request_order_id_fkey")
+  product       Product       @relation(fields: [productId], references: [productId], onDelete: Restrict, map: "return_request_product_id_fkey")
+
+  @@index([orderId], map: "idx_return_request_order")
+  @@index([productId], map: "idx_return_request_product")
+  @@map("return_request")
+}
+
+model Refund {
+  refundId      Int            @id(map: "refund_pkey") @default(autoincrement()) @map("refund_id")
+  returnId      Int            @unique(map: "refund_return_id_key") @map("return_id")
+  amount        Numeric(12, 2)
+  status        VarChar(30)    @default("pending")
+  paymentMethod VarChar(40)?   @map("payment_method")
+  processedAt   Timestamp?     @map("processed_at")
+  return        ReturnRequest  @relation(fields: [returnId], references: [returnId], onDelete: Cascade, map: "refund_return_id_fkey")
+
+  @@map("refund")
+}
+
+model Review {
+  reviewId   Int            @id(map: "review_pkey") @default(autoincrement()) @map("review_id")
+  productId  Int            @map("product_id")
+  customerId Int?           @map("customer_id")
+  rating     SmallInt
+  comment    VarChar(1000)?
+  createdAt  Timestamp      @default(now()) @map("created_at")
+  customer   Customer?      @relation(fields: [customerId], references: [customerId], onDelete: SetNull, map: "review_customer_id_fkey")
+  product    Product        @relation(fields: [productId], references: [productId], onDelete: Cascade, map: "review_product_id_fkey")
+
+  @@index([customerId], map: "idx_review_customer")
+  @@index([productId], map: "idx_review_product")
+  @@index([productId, rating], map: "idx_review_product_rating")
+  @@check(expression: "((rating >= 1) AND (rating <= 5))", map: "review_rating_check")
+  @@map("review")
+}
+
+model Shipment {
+  shipmentId        Int           @id(map: "shipment_pkey") @default(autoincrement()) @map("shipment_id")
+  orderId           Int           @unique(map: "shipment_order_id_key") @map("order_id")
+  courierId         Int?          @map("courier_id")
+  trackingNumber    VarChar(100)? @map("tracking_number")
+  status            VarChar(30)   @default("preparing")
+  estimatedDelivery Timestamp?    @map("estimated_delivery")
+  dispatchedAt      Timestamp?    @map("dispatched_at")
+  deliveredAt       Timestamp?    @map("delivered_at")
+  courier           Courier?      @relation(fields: [courierId], references: [courierId], onDelete: SetNull, map: "shipment_courier_id_fkey")
+  order             CustomerOrder @relation(fields: [orderId], references: [orderId], onDelete: Cascade, map: "shipment_order_id_fkey")
+
+  @@index([courierId], map: "idx_shipment_courier")
+  @@index([orderId], map: "idx_shipment_order")
+  @@map("shipment")
+}
+
+model SupportTicket {
+  ticketId   Int          @id(map: "support_ticket_pkey") @default(autoincrement()) @map("ticket_id")
+  customerId Int          @map("customer_id")
+  subject    VarChar(200)
+  status     VarChar(30)  @default("open")
+  priority   VarChar(20)  @default("normal")
+  createdAt  Timestamp    @default(now()) @map("created_at")
+  customer   Customer     @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "support_ticket_customer_id_fkey")
+
+  @@index([customerId], map: "idx_support_ticket_customer")
+  @@map("support_ticket")
+}
+
+model VariantInventory {
+  id             Int            @id(map: "variant_inventory_pkey") @default(autoincrement())
+  variantCode    VarChar(60)    @map("variant_code")
+  warehouseNo    Int            @map("warehouse_no")
+  quantity       Int            @default(0)
+  reorderLevel   Int?           @map("reorder_level")
+  lastUpdated    Timestamp      @default(now()) @map("last_updated")
+  productVariant ProductVariant @relation(fields: [variantCode], references: [variantCode], onDelete: Cascade, map: "variant_inventory_variant_code_fkey")
+  warehouse      Warehouse      @relation(fields: [warehouseNo], references: [warehouseNo], onDelete: Cascade, map: "variant_inventory_warehouse_no_fkey")
+
+  @@unique([variantCode, warehouseNo], map: "variant_inventory_variant_code_warehouse_no_key")
+  @@index([variantCode], map: "idx_variant_inventory_variant")
+  @@index([warehouseNo], map: "idx_variant_inventory_warehouse")
+  @@map("variant_inventory")
+}
+
+model Wallet {
+  walletId   Int            @id(map: "wallet_pkey") @default(autoincrement()) @map("wallet_id")
+  customerId Int            @unique(map: "wallet_customer_id_key") @map("customer_id")
+  balance    Numeric(12, 2) @default(0)
+  bankAdress VarChar(200)?  @map("bank_adress")
+  updatedAt  Timestamp      @default(now()) @map("updated_at")
+  customer   Customer       @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "wallet_customer_id_fkey")
+
+  @@map("wallet")
+}
+
+model Wishlist {
+  wishlistId    Int            @id(map: "wishlist_pkey") @default(autoincrement()) @map("wishlist_id")
+  customerId    Int            @unique(map: "wishlist_customer_id_key") @map("customer_id")
+  createdAt     Timestamp      @default(now()) @map("created_at")
+  wishlistItems WishlistItem[]
+  customer      Customer       @relation(fields: [customerId], references: [customerId], onDelete: Cascade, map: "wishlist_customer_id_fkey")
+
+  @@map("wishlist")
+}
+
+model WishlistItem {
+  id             Int             @id(map: "wishlist_item_pkey") @default(autoincrement())
+  wishlistId     Int             @map("wishlist_id")
+  productId      Int             @map("product_id")
+  variantCode    VarChar(60)?    @map("variant_code")
+  addedAt        Timestamp       @default(now()) @map("added_at")
+  product        Product         @relation(fields: [productId], references: [productId], onDelete: Cascade, map: "wishlist_item_product_id_fkey", index: false)
+  productVariant ProductVariant? @relation(fields: [variantCode], references: [variantCode], onDelete: SetNull, map: "wishlist_item_variant_code_fkey", index: false)
+  wishlist       Wishlist        @relation(fields: [wishlistId], references: [wishlistId], onDelete: Cascade, map: "wishlist_item_wishlist_id_fkey", index: false)
+
+  @@unique([wishlistId, variantCode], map: "wishlist_item_wishlist_id_variant_code_key")
+  @@map("wishlist_item")
+}

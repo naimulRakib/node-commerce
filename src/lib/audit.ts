@@ -1,13 +1,9 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "./db";
+import { db } from "./db";
 
-// ─── Audit Log Helper ─────────────────────────────────────────
-// Records every significant state change for compliance and debugging.
-// This satisfies the academic requirement for DBMS audit trail.
-// Records: table, record_id, action (INSERT/UPDATE/DELETE),
-//          who changed it, old data snapshot, new data snapshot.
-//
-// The AuditLog table uses DELETE RESTRICT semantics — records are NEVER deleted.
+// ─── অডিট লগ হেলপার (Audit Log Helper) ─────────────────────────────────────────
+// সিস্টেমে ডেটার যেকোনো গুরুত্বপূর্ণ পরিবর্তন (INSERT, UPDATE, DELETE) ট্র্যাক ও রেকর্ড করার ফাংশন।
+// এটি ডাটাবেসের অডিট ট্রেইল (Audit Trail) এবং নিরাপত্তা কমপ্লায়েন্স (Security Compliance) নিশ্চিত করে।
+// রেকর্ডসমূহ: টেবিলের নাম, রেকর্ডের আইডি, অ্যাকশনের ধরণ, পরিবর্তনকারীর আইডি, পূর্ববর্তী ডেটার স্ন্যাপশট, নতুন ডেটার স্ন্যাপশট।
 
 export async function logAudit(
   tableName: string,
@@ -18,18 +14,32 @@ export async function logAudit(
   newData: Record<string, unknown> | null
 ): Promise<void> {
   try {
-    await prisma.auditLog.create({
-      data: {
-        table_name: tableName,
-        record_id: recordId,
-        action,
-        changed_by: changedBy,
-        old_data: oldData ? (oldData as Prisma.InputJsonValue) : undefined,
-        new_data: newData ? (newData as Prisma.InputJsonValue) : undefined,
-      },
-    });
+    // প্যারামিটারাইজড কুয়েরি ব্যবহার করে ডাটাবেসের 'audit_log' টেবিলে নতুন অডিট এন্ট্রি সংরক্ষণ করা হচ্ছে।
+    await db.query(`
+      INSERT INTO audit_log (table_name, record_id, action, changed_by, old_data, new_data)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [tableName, recordId, action, changedBy, oldData, newData]);
   } catch (error) {
-    // Audit log failures should not break the main flow — log to console only
+    // অডিট লগিং ব্যর্থ হলেও মূল সিস্টেম প্রসেস বা বিজনেস লজিক যেন বন্ধ না হয় (Non-blocking design)।
+    // ত্রুটিটি শুধুমাত্র সার্ভার কনসোলে রেজিস্টার করা হয়।
     console.error("[AuditLog] Failed to write audit entry:", error);
   }
 }
+
+/*
+================================================================================
+একাডেমিক বিশ্লেষণ (Academic Documentation)
+================================================================================
+
+১. কার্যপ্রণালী (Methodology):
+এই ফাইলটি (`src/lib/audit.ts`) ই-কমার্স সিস্টেমের তথ্য জবাবদিহিতা (Accountability) এবং নিরীক্ষণ ট্রেইল (Audit Trail) পরিচালনার মূল কেন্দ্রবিন্দু। ডাটাবেসে যখনই কোনো স্পর্শকাতর রেকর্ড তৈরি (INSERT), সংশোধন (UPDATE) বা মুছে ফেলা (DELETE) হয় (যেমন: অর্ডার স্ট্যাটাস পরিবর্তন, কুরিয়ার অ্যাসাইন, বা অ্যাকাউন্ট আপডেট), তখন `logAudit` ফাংশনটি ইনভোক করা হয়। এটি পরিবর্তনের পূর্ববর্তী (old_data) ও পরবর্তী (new_data) অবস্থার একটি JSON স্ন্যাপশট ডাটাবেসের `audit_log` টেবিলে স্থায়ীভাবে সংরক্ষণ করে।
+
+২. প্রমাণীকরণ ও নিরাপত্তা (Authentication & Security):
+- **নন-রেপুডিয়েশন (Non-repudiation)**: সিস্টেমে কে, কখন, কোন টেবিলের ডেটা পরিবর্তন করেছে (`changed_by` ইউজার আইডি সহ) তার একটি অপরিবর্তনযোগ্য ডিজিটাল রেকর্ড রাখা হয়, যা পরবর্তীতে কেউ অস্বীকার করতে পারে না।
+- **এসকিউএল ইনজেকশন প্রতিরোধ**: কুয়েরিতে সরাসরি ভ্যালু ক্যাটালগ না করে প্যারামিটারাইজড স্টেটমেন্ট (`$1, $2, ...`) ব্যবহার করা হয়েছে।
+- **ডিজিটালি সুরক্ষিত আর্কিটেকচার**: অডিট লগে কোনো ডেটা ফেইল করলে (যেমন: কলাম টাইপ মিসম্যাচ) তা প্রধান ডাটাবেস ট্রানজ্যাকশনকে ভেস্তে দেয় না (`try-catch` ব্লক দিয়ে হ্যান্ডেল করা), যা সিস্টেমের হাই-অ্যাভেলেবিলিটি (High Availability) নিশ্চিত করে।
+
+৩. এপিআই ও উপাত্ত প্রবাহ (API & Data Flow):
+`logAudit` ফাংশনটি মূলত ব্যাকএন্ড সার্ভার অ্যাকশন (যেমন: `src/actions/admin.ts` বা `src/actions/auth.ts`) থেকে কল করা হয়। উদাহরণস্বরূপ: অ্যাডমিন যখন কোনো অর্ডারের কুরিয়ার পরিবর্তন করে, তখন পরিবর্তন হওয়ার আগের কুরিয়ার আইডি এবং নতুন কুরিয়ার আইডি উভয়ই JSON স্ট্রাকচারে অডিট লগে স্থানান্তরিত হয়। এই লগের রেকর্ডগুলো ডাটাবেস লেভেলে কাখনোই ডিলিট করা যায় না (DELETE RESTRICT/Immutability), যা একাডেমিক DBMS অডিট স্ট্যান্ডার্ড শতভাগ পূরণ করে।
+================================================================================
+*/

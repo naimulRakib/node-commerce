@@ -1,31 +1,46 @@
 import Link from "next/link";
+// কুকি থেকে সেশন (Session) রিড (Read) করার ফাংশন।
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+// ডাটাবেস কোয়েরি করার জন্য অবজেক্ট।
+import { db } from "@/lib/db";
+// লগ-আউট করার সার্ভার অ্যাকশন।
 import { logoutAction } from "@/actions/auth";
 
+// ─── ডাটাবেস কোয়েরি (Database Query) ──────────────────────────────────────────
+// ইউজারের কার্টে কয়টি আইটেম আছে তা বের করার জন্য এই ফাংশন।
 async function getCartCount(customerId: number): Promise<number> {
-  const cart = await prisma.cart.findUnique({
-    where: { customer_id: customerId },
-    include: { _count: { select: { items: true } } },
-  });
-  return cart?._count.items ?? 0;
+  // প্রথমে ইউজারের কার্ট আইডি বের করা।
+  const cartRes = await db.query('SELECT cart_id FROM cart WHERE customer_id = $1', [customerId]);
+  if (cartRes.rows.length === 0) return 0; // কার্ট না থাকলে ০।
+  
+  // তারপর সেই কার্টের আইটেম গণনা (COUNT) করা।
+  const countRes = await db.query('SELECT COUNT(*) FROM cart_item WHERE cart_id = $1', [cartRes.rows[0].cart_id]);
+  return Number(countRes.rows[0].count);
 }
 
+// ─── নেভিগেশন বার (Navbar Component) ──────────────────────────────────────────
+// এটি একটি সার্ভার কম্পোনেন্ট, যা রিকোয়েস্টের সময় সার্ভারেই ডেটা ফেচ করে রেন্ডার হয়।
 export default async function Navbar() {
+  // ১. সেশন ডেটা ফেচিং (Session Data Fetching): কুকি থেকে বর্তমান ইউজারের তথ্য নেওয়া।
   const session = await getSession();
+
+  // ২. কার্ট কাউন্ট ফেচিং (Cart Count Fetching): ইউজার লগ-ইন করা থাকলে ডাটাবেস থেকে সংখ্যা নেওয়া।
   const cartCount = session?.role === "customer" ? await getCartCount(session.id) : 0;
+  
+  // ৩. অ্যাডমিন চেক (Admin Check): ইউজারের রোল কি অ্যাডমিন বা সুপার অ্যাডমিন কি না।
   const isAdmin = session && ["admin", "super_admin"].includes(session.role);
 
   return (
     <nav style={{
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
       background: "rgba(10,10,15,0.95)",
-      backdropFilter: "blur(20px)",
+      backdropFilter: "blur(20px)", // Glassmorphism ইফেক্ট
       borderBottom: "1px solid rgba(255,255,255,0.06)",
       padding: "14px 0",
     }}>
       <div className="container" style={{ display: "flex", alignItems: "center", gap: 24 }}>
-        {/* Logo */}
+        
+        {/* 1. লোগো (Logo) */}
         <Link href="/" style={{ textDecoration: "none", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
@@ -41,7 +56,7 @@ export default async function Navbar() {
           </div>
         </Link>
 
-        {/* Nav Links */}
+        {/* 2. মেনু লিংক (Nav Links) */}
         <div style={{ display: "flex", gap: 4 }}>
           {[
             { href: "/", label: "Home" },
@@ -58,6 +73,7 @@ export default async function Navbar() {
               {item.label}
             </Link>
           ))}
+          {/* অ্যাডমিন হলে অতিরিক্ত লিংক দেখানো হবে */}
           {isAdmin && (
             <Link href="/admin" style={{
               color: "#c084fc", textDecoration: "none",
@@ -69,29 +85,34 @@ export default async function Navbar() {
           )}
         </div>
 
-        {/* Search */}
+        {/* 3. সার্চ বার (Search Bar) */}
         <div style={{ flex: 1, position: "relative" }}>
-          <Link href="/products">
+          <form action="/products" method="GET">
             <input
               type="text"
+              name="q"
               placeholder="Search products, brands, categories..."
-              readOnly
               style={{
                 width: "100%",
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.07)",
                 borderRadius: 50, padding: "10px 20px 10px 44px",
-                color: "white", fontSize: 14, outline: "none", cursor: "pointer",
+                color: "white", fontSize: 14, outline: "none",
               }}
             />
-          </Link>
-          <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>🔍</span>
+            <button type="submit" style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </button>
+          </form>
         </div>
 
-        {/* Right Actions */}
+        {/* 4. ডান দিকের অ্যাকশন প্যানেল (Right Actions) */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          
+          {/* যদি ইউজার লগ-ইন করা কাস্টমার হয় */}
           {session?.role === "customer" && (
             <>
+              {/* উইশলিস্ট বাটন */}
               <Link href="/account/wishlist" id="nav-wishlist-btn" style={{
                 width: 42, height: 42, borderRadius: 12,
                 background: "rgba(255,255,255,0.04)",
@@ -101,6 +122,7 @@ export default async function Navbar() {
                 textDecoration: "none",
               }}>🤍</Link>
 
+              {/* কার্ট বাটন (ব্যাজ সহ) */}
               <Link href="/cart" id="nav-cart-btn" style={{
                 position: "relative", display: "flex", alignItems: "center", gap: 8,
                 padding: "10px 20px",
@@ -109,7 +131,7 @@ export default async function Navbar() {
                 fontSize: 14, fontWeight: 600, cursor: "pointer",
                 textDecoration: "none",
               }}>
-                🛒 Cart
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg> Cart
                 {cartCount > 0 && (
                   <span style={{
                     minWidth: 22, height: 22,
@@ -120,6 +142,7 @@ export default async function Navbar() {
                 )}
               </Link>
 
+              {/* প্রোফাইল বাটন */}
               <Link href="/account" style={{
                 display: "flex", alignItems: "center", gap: 8,
                 padding: "8px 16px",
@@ -133,6 +156,7 @@ export default async function Navbar() {
             </>
           )}
 
+          {/* যদি ইউজার লগ-ইন না থাকে */}
           {!session && (
             <>
               <Link href="/login" id="nav-login-btn" style={{
@@ -151,6 +175,7 @@ export default async function Navbar() {
             </>
           )}
 
+          {/* যদি যেকোনো রোল (অ্যাডমিন বা কাস্টমার) লগ-ইন থাকে, লগ-আউট বাটন দেখাও */}
           {session && (
             <form action={logoutAction}>
               <button type="submit" style={{
@@ -167,3 +192,19 @@ export default async function Navbar() {
     </nav>
   );
 }
+
+/*
+================================================================================
+একাডেমিক বিশ্লেষণ (Academic Documentation)
+================================================================================
+
+১. কার্যপ্রণালী (Methodology):
+এই ফাইলটি (`src/components/Navbar.tsx`) ওয়েবসাইটের প্রধান নেভিগেশন বার তৈরি করে। এটি একটি "Server Component", যার মানে হলো এটি সার্ভার-সাইডে এক্সিকিউট হয়। এটি ডাটাবেস থেকে সরাসরি ডেটা ফেচ (Fetch) করতে পারে, যেমন: `getSession` এর মাধ্যমে বর্তমান ইউজারের সেশন জানা এবং `getCartCount` এর মাধ্যমে কার্টের আইটেম সংখ্যা বের করা।
+
+২. সার্ভার-সাইড রেন্ডারিং (Server-Side Rendering / SSR):
+রিয়্যাক্ট (React) অ্যাপ্লিকেশনে সাধারণত ক্লায়েন্ট-সাইডে এপিআই কল করে কার্ট কাউন্ট (Cart Count) বা সেশন চেক করতে হয়, যা 'ওয়াটারফল (Waterfall)' সমস্যার সৃষ্টি করে। নেক্সট.জেএস-এ এই কম্পোনেন্টটি সার্ভারেই ডাটাবেস থেকে কাউন্ট বের করে সম্পূর্ণ HTML জেনারেট করে ব্রাউজারে পাঠায়। এটি জিরো-জাভাস্ক্রিপ্ট (Zero-JS) বা ফাস্ট ইনিশিয়াল লোড (Fast Initial Load) নিশ্চিত করে।
+
+৩. ডাইনামিক ইউআই রেন্ডারিং (Dynamic UI Rendering):
+`session` এবং `session.role` ভেরিয়েবলের উপর ভিত্তি করে UI কন্ডিশনালি রেন্ডার করা হয়। যদি ইউজার অ্যাডমিন হয়, তবে সে অ্যাডমিন ড্যাশবোর্ডের লিংক দেখবে; যদি কাস্টমার হয়, তবে উইশলিস্ট ও কার্ট দেখবে; আর যদি লগ-ইন না থাকে, তবে লগ-ইন/রেজিস্ট্রেশন বাটন দেখবে।
+================================================================================
+*/

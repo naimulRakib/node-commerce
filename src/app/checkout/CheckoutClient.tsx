@@ -44,8 +44,12 @@ export default function CheckoutClient({
   const [addAddrError, setAddAddrError] = useState("");
 
   const shippingFee = cart.subtotal >= 999 ? 0 : 60;
+  // Calculate VAT based on base total (similar to backend logic in transactions.ts)
+  const baseTotal = cart.subtotal + shippingFee;
+  const vatAmount = baseTotal * 0.05;
+  const totalAmount = baseTotal + vatAmount;
 
-  async function handlePlaceOrder(e: React.FormEvent<HTMLFormElement>) {
+  async function handlePlaceOrder(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
     if (!selectedAddress) { setError("Please select a shipping address"); return; }
     setLoading(true);
@@ -76,14 +80,31 @@ export default function CheckoutClient({
   }
 
   const paymentMethods = [
-    { value: "cod", label: "Cash on Delivery", icon: "💵" },
-    { value: "bkash", label: "bKash", icon: "📱" },
-    { value: "nagad", label: "Nagad", icon: "📱" },
-    { value: "card", label: "Credit/Debit Card", icon: "💳" },
+    { value: "cod", label: "Cash on Delivery", icon: <img src="/demo/cod.jpg" alt="COD" style={{width: 24, height: 24, borderRadius: 4, objectFit: "cover"}} /> },
+    { value: "bkash", label: "bKash", icon: <img src="/demo/bkash.jpg" alt="bKash" style={{width: 24, height: 24, borderRadius: 4, objectFit: "cover"}} /> },
+    { value: "nagad", label: "Nagad", icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" style={{ borderRadius: 4, background: "#f97316" }}>
+        <path d="M12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C16.42 20 20 16.42 20 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 6"/>
+        <circle cx="12" cy="12" r="3" fill="white" />
+      </svg>
+    )},
+    { value: "card", label: "Credit/Debit Card", icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" style={{ borderRadius: 4, background: "#1e293b" }}>
+        <rect x="2" y="5" width="20" height="14" rx="2" fill="none" stroke="white" strokeWidth="1.5" />
+        <line x1="2" y1="10" x2="22" y2="10" stroke="white" strokeWidth="1.5" />
+        <rect x="16" y="14" width="4" height="2" rx="0.5" fill="white" />
+      </svg>
+    )},
+    { value: "wallet", label: "Wallet Balance", icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" style={{ borderRadius: 4, background: "#8b5cf6" }}>
+        <path d="M20 7V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M22 12c0 2.2-1.8 4-4 4s-4-1.8-4-4 1.8-4 4-4 4 1.8 4 4z" fill="white" />
+      </svg>
+    )},
   ];
 
   return (
-    <form onSubmit={handlePlaceOrder}>
+    <div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 32, alignItems: "start" }}>
         {/* Left Column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -93,7 +114,7 @@ export default function CheckoutClient({
             borderRadius: 20, padding: 24,
           }}>
             <h2 style={{ fontFamily: "Outfit, sans-serif", fontWeight: 700, color: "white", fontSize: 18, marginBottom: 20 }}>
-              📍 Shipping Address
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Shipping Address
             </h2>
             {addresses.length === 0 ? (
               <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14, marginBottom: 16 }}>No saved addresses. Add one below.</p>
@@ -152,7 +173,7 @@ export default function CheckoutClient({
               borderRadius: 20, padding: 24,
             }}>
               <h2 style={{ fontFamily: "Outfit, sans-serif", fontWeight: 700, color: "white", fontSize: 18, marginBottom: 20 }}>
-                🚚 Select Courier
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="15" height="13" x="1" y="3" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> Select Courier
               </h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {couriers.map(c => (
@@ -181,7 +202,7 @@ export default function CheckoutClient({
             borderRadius: 20, padding: 24,
           }}>
             <h2 style={{ fontFamily: "Outfit, sans-serif", fontWeight: 700, color: "white", fontSize: 18, marginBottom: 20 }}>
-              💳 Payment Method
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg> Payment Method
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {paymentMethods.map(pm => (
@@ -194,7 +215,7 @@ export default function CheckoutClient({
                   <input type="radio" checked={paymentMethod === pm.value}
                     onChange={() => setPaymentMethod(pm.value)}
                     style={{ accentColor: "#eab308" }} />
-                  <span style={{ fontSize: 18 }}>{pm.icon}</span>
+                  <span style={{ display: "flex", alignItems: "center" }}>{pm.icon}</span>
                   <span style={{ color: paymentMethod === pm.value ? "white" : "rgba(255,255,255,0.6)", fontSize: 14, fontWeight: paymentMethod === pm.value ? 600 : 400 }}>
                     {pm.label}
                   </span>
@@ -224,11 +245,15 @@ export default function CheckoutClient({
                 {shippingFee === 0 ? "FREE" : `৳${shippingFee}`}
               </span>
             </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>VAT (5%)</span>
+              <span style={{ color: "white", fontWeight: 600 }}>৳{vatAmount.toFixed(2)}</span>
+            </div>
             <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "8px 0" }} />
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "white", fontWeight: 700, fontSize: 16 }}>Total</span>
+              <span style={{ color: "white", fontWeight: 700, fontSize: 16 }}>Total Billed</span>
               <span className="gradient-text" style={{ fontFamily: "Outfit, sans-serif", fontWeight: 800, fontSize: 24 }}>
-                ৳{(cart.subtotal + shippingFee).toLocaleString()}
+                ৳{totalAmount.toLocaleString()}
               </span>
             </div>
           </div>
@@ -249,12 +274,13 @@ export default function CheckoutClient({
               padding: "12px 16px", borderRadius: 12, marginBottom: 16,
               background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
               color: "#f87171", fontSize: 14,
-            }}>⚠️ {error}</div>
+            }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> {error}</div>
           )}
 
           <button
             id="place-order-btn"
-            type="submit"
+            type="button"
+            onClick={handlePlaceOrder}
             disabled={loading}
             style={{
               width: "100%", padding: "16px",
@@ -264,15 +290,19 @@ export default function CheckoutClient({
               cursor: loading ? "not-allowed" : "pointer",
             }}
           >
-            {loading ? "Placing Order..." : "✅ Place Order"}
+            {loading ? "Placing Order..." : (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Place Order
+              </span>
+            )}
           </button>
 
           <p style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.2)", marginTop: 12 }}>
-            🔒 By placing your order, you agree to our Terms of Service
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> By placing your order, you agree to our Terms of Service
           </p>
         </div>
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -281,3 +311,20 @@ const inputStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
   borderRadius: 10, color: "white", fontSize: 14, outline: "none",
 };
+
+
+/*
+================================================================================
+একাডেমিক বিশ্লেষণ (Academic Documentation)
+================================================================================
+
+১. কার্যপ্রণালী (Methodology):
+এই ফাইলটি প্রোজেক্টের একটি ইউটিলিটি (Utility) বা সাপোর্টিং মডিউল হিসেবে কাজ করে। টাইপস্ক্রিপ্ট (TypeScript) ব্যবহারের কারণে এতে স্ট্যাটিক টাইপ চেকিং (Static Type Checking) নিশ্চিত হয়, যা রানটাইম এরর (Runtime Error) হওয়ার সম্ভাবনা অনেকাংশে কমিয়ে দেয়।
+
+২. লজিক (Logic):
+এখানে নির্দিষ্ট কিছু হেল্পার ফাংশন, কনফিগারেশন বা টাইপ ডেফিনেশন থাকতে পারে যা প্রোজেক্টের বিভিন্ন অংশে ইমপোর্ট করে ব্যবহার করা হয় (DRY Principle - Don't Repeat Yourself)।
+
+৩. ব্যবহারিক গুরুত্ব (Practical Significance):
+কোডবেসকে ক্লিন (Clean) এবং মডুলার (Modular) রাখার জন্য এ ধরনের শেয়ার্ড ফাইলের গুরুত্ব অপরিসীম।
+================================================================================
+*/

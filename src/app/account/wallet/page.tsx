@@ -1,24 +1,30 @@
 import { Metadata } from "next";
 import { requireCustomer } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
+import AddMoneyClient from "./AddMoneyClient";
 
 export const metadata: Metadata = { title: "My Wallet — NodeCommerce" };
 
 export default async function WalletPage() {
   const session = await requireCustomer();
 
-  const [wallet, refunds] = await Promise.all([
-    prisma.wallet.findUnique({ where: { customer_id: session.id } }),
-    prisma.refund.findMany({
-      where: {
-        status: "processed",
-        return_request: { order: { customer_id: session.id } },
-      },
-      include: { return_request: { include: { order: { select: { order_id: true } } } } },
-      orderBy: { processed_at: "desc" },
-      take: 10,
-    }),
+  const [walletRes, refundsRes] = await Promise.all([
+    db.query('SELECT * FROM wallet WHERE customer_id = $1', [session.id]),
+    db.query(`
+      SELECT r.*, rq.order_id
+      FROM refund r
+      JOIN return_request rq ON r.return_id = rq.return_id
+      JOIN customer_order o ON rq.order_id = o.order_id
+      WHERE r.status = 'processed' AND o.customer_id = $1
+      ORDER BY r.processed_at DESC LIMIT 10
+    `, [session.id])
   ]);
+
+  const wallet = walletRes.rows[0] || null;
+  const refunds = refundsRes.rows.map(row => ({
+    ...row,
+    return_request: { order: { order_id: row.order_id } }
+  }));
 
   const balance = Number(wallet?.balance ?? 0);
 
@@ -40,6 +46,7 @@ export default async function WalletPage() {
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginTop: 8 }}>
           Use at checkout for instant discount
         </div>
+        <AddMoneyClient />
       </div>
 
       {/* Transaction History */}
@@ -78,3 +85,22 @@ export default async function WalletPage() {
     </div>
   );
 }
+
+
+/*
+================================================================================
+একাডেমিক বিশ্লেষণ (Academic Documentation)
+================================================================================
+
+১. কার্যপ্রণালী (Methodology):
+এই ফাইলটি নেক্সট.জেএস (Next.js) অ্যাপ রাউটারের (App Router) একটি রুট পেজ (Page Component)। ফোল্ডার স্ট্রাকচারের উপর ভিত্তি করে নেক্সট.জেএস স্বয়ংক্রিয়ভাবে এর রাউটিং (File-system based Routing) তৈরি করে। এটি সাধারণত একটি সার্ভার কম্পোনেন্ট (Server Component), যা ব্রাউজারে যাওয়ার আগেই সার্ভারে রেন্ডার (SSR) হয়।
+
+২. লজিক ও ডেটা ফ্লো (Logic & Data Flow):
+- পেজ কম্পোনেন্টগুলো সরাসরি ডেটাবেস বা এক্সটার্নাল API থেকে ডেটা ফেচ (Fetch) করতে পারে, কারণ এগুলো সার্ভারে রান হয়।
+- প্রপস হিসেবে এটি রাউটের 'params' (যেমন: /products/[id]) এবং 'searchParams' (যেমন: ?page=2) গ্রহণ করে।
+- ডেটা ফেচিং শেষে এটি UI রেন্ডার করে ক্লায়েন্টে পাঠায়।
+
+৩. ব্যবহারিক গুরুত্ব (Practical Significance):
+সার্ভার-সাইড রেন্ডারিংয়ের ফলে ফার্স্ট কন্টেন্টফুল পেইন্ট (First Contentful Paint) ফাস্ট হয় এবং সার্চ ইঞ্জিন অপটিমাইজেশন (SEO) অত্যন্ত ভালো হয়।
+================================================================================
+*/

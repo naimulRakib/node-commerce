@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { requireCustomer } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 import { ProfileForm, AddressManager } from "./ProfileClient";
 
 export const metadata: Metadata = { title: "My Profile — NodeCommerce" };
@@ -8,11 +8,15 @@ export const metadata: Metadata = { title: "My Profile — NodeCommerce" };
 export default async function ProfilePage() {
   const session = await requireCustomer();
 
-  const [customer, profile, addresses] = await Promise.all([
-    prisma.customer.findUnique({ where: { customer_id: session.id }, select: { name: true, email: true, phone: true } }),
-    prisma.profile.findUnique({ where: { customer_id: session.id } }),
-    prisma.address.findMany({ where: { customer_id: session.id }, orderBy: [{ is_default: "desc" }, { created_at: "asc" }] }),
+  const [customerRes, profileRes, addressesRes] = await Promise.all([
+    db.query('SELECT name, email, phone FROM customer WHERE customer_id = $1', [session.id]),
+    db.query('SELECT * FROM profile WHERE customer_id = $1', [session.id]),
+    db.query('SELECT * FROM address WHERE customer_id = $1 ORDER BY is_default DESC, created_at ASC', [session.id])
   ]);
+
+  const customer = customerRes.rows[0];
+  const profile = profileRes.rows[0] || null;
+  const addresses = addressesRes.rows;
 
   return (
     <div>
@@ -46,3 +50,22 @@ export default async function ProfilePage() {
     </div>
   );
 }
+
+
+/*
+================================================================================
+একাডেমিক বিশ্লেষণ (Academic Documentation)
+================================================================================
+
+১. কার্যপ্রণালী (Methodology):
+এই ফাইলটি নেক্সট.জেএস (Next.js) অ্যাপ রাউটারের (App Router) একটি রুট পেজ (Page Component)। ফোল্ডার স্ট্রাকচারের উপর ভিত্তি করে নেক্সট.জেএস স্বয়ংক্রিয়ভাবে এর রাউটিং (File-system based Routing) তৈরি করে। এটি সাধারণত একটি সার্ভার কম্পোনেন্ট (Server Component), যা ব্রাউজারে যাওয়ার আগেই সার্ভারে রেন্ডার (SSR) হয়।
+
+২. লজিক ও ডেটা ফ্লো (Logic & Data Flow):
+- পেজ কম্পোনেন্টগুলো সরাসরি ডেটাবেস বা এক্সটার্নাল API থেকে ডেটা ফেচ (Fetch) করতে পারে, কারণ এগুলো সার্ভারে রান হয়।
+- প্রপস হিসেবে এটি রাউটের 'params' (যেমন: /products/[id]) এবং 'searchParams' (যেমন: ?page=2) গ্রহণ করে।
+- ডেটা ফেচিং শেষে এটি UI রেন্ডার করে ক্লায়েন্টে পাঠায়।
+
+৩. ব্যবহারিক গুরুত্ব (Practical Significance):
+সার্ভার-সাইড রেন্ডারিংয়ের ফলে ফার্স্ট কন্টেন্টফুল পেইন্ট (First Contentful Paint) ফাস্ট হয় এবং সার্চ ইঞ্জিন অপটিমাইজেশন (SEO) অত্যন্ত ভালো হয়।
+================================================================================
+*/
