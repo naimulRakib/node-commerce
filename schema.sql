@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict bNGCwoALeYleVGUsqBCIiZnaWyJ4wPt6ZNv5BC3OvmmBd0paLHsefE5uM2CJ4cu
+\restrict hOReAMbX4PBueL1nbGhPQVMs3MSXviaycMjQ4aWFDQV99uMcAWkHmKx49gWPCEl
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -993,6 +993,7 @@ CREATE TABLE public.review (
     rating smallint NOT NULL,
     comment character varying(1000),
     created_at timestamp without time zone DEFAULT now() NOT NULL,
+    is_verified boolean DEFAULT false NOT NULL,
     CONSTRAINT review_rating_check CHECK (((rating >= 1) AND (rating <= 5)))
 );
 
@@ -2453,5 +2454,5 @@ ALTER TABLE ONLY public.wishlist_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict bNGCwoALeYleVGUsqBCIiZnaWyJ4wPt6ZNv5BC3OvmmBd0paLHsefE5uM2CJ4cu
+\unrestrict hOReAMbX4PBueL1nbGhPQVMs3MSXviaycMjQ4aWFDQV99uMcAWkHmKx49gWPCEl
 
