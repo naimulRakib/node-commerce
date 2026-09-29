@@ -31,7 +31,7 @@ export default async function WishlistPage() {
   `, [session.id]);
 
   const items = itemsRes.rows.map(row => ({
-    id: row.wishlist_item_id,
+    id: row.id,
     product: {
       product_id: row.product_id,
       name: row.product_name,

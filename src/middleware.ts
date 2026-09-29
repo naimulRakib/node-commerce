@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // ৩. পাবলিক পাথগুলো (যেগুলোতে লগইন ছাড়াই যাওয়া যাবে) নির্ধারণ করা।
-  const isPublicPath = path === '/login' || path === '/register' || path.startsWith('/api/auth');
+  const isPublicPath = path === '/' || path.startsWith('/products') || path === '/login' || path === '/register' || path.startsWith('/api/auth') || path.startsWith('/api/db-status');
 
   // যদি ইউজার এমন কোনো পেজে যেতে চায় যেটা পাবলিক নয় (অর্থাৎ লগইন দরকার)...
   if (!isPublicPath) {
@@ -49,7 +49,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // যদি ইউজার আগে থেকেই লগইন করা থাকে (টোকেন ভ্যালিড) এবং সে আবার লগইন বা রেজিস্টার পেজে যেতে চায়...
-  if (isPublicPath && token) {
+  const isAuthPage = path === '/login' || path === '/register';
+  if (isAuthPage && token) {
     try {
       await jwtVerify(token, JWT_SECRET);
       // তাকে সরাসরি হোমপেজে রিডাইরেক্ট করে দেওয়া হবে (কারণ সে তো আগে থেকেই লগইন করা)।

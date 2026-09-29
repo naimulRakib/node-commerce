@@ -264,7 +264,11 @@ export default function CartClientPage({ items }: { items: CartItem[] }) {
 
         {/* নিরাপত্তা ও পেমেন্টের নির্দেশক আইকন (Security Indicators) */}
         <div style={{ marginTop: 20, display: "flex", justifyContent: "center", gap: 8 }}>
-          {[<svg key="card" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>, "📱", "🏦"].map((icon, i) => (
+          {[
+            <svg key="card" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>,
+            <svg key="phone" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>,
+            <svg key="bank" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="12" x="2" y="10" rx="2"/><path d="M2 10v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4"/><path d="M12 14v4"/><path d="M8 14v4"/><path d="M16 14v4"/></svg>
+          ].map((icon, i) => (
             <span key={i} style={{ fontSize: 18 }}>{icon}</span>
           ))}
         </div>

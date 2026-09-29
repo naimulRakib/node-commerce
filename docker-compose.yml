@@ -53,5 +53,14 @@ services:
     depends_on:
       - db
 
+  adminer:
+    image: adminer
+    container_name: nodecommerce_adminer
+    restart: unless-stopped
+    ports:
+      - "5656:8080"
+    depends_on:
+      - db
+
 volumes:
   pgdata:

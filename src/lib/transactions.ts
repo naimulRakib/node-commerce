@@ -210,6 +210,18 @@ export async function placeOrder(
       await client.query(`
         UPDATE wallet SET balance = balance - $1 WHERE customer_id = $2
       `, [totalAmount, customerId]);
+
+      // [CHECKLIST REQUIREMENT 3]: ট্রানজ্যাকশনের ভেতরেই ওয়ালেট ব্যালেন্স কাটার অডিট লগ তৈরি করা হচ্ছে (Atomic Commit Log)
+      await client.query(`
+        INSERT INTO audit_log (table_name, record_id, action, changed_by, new_data)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [
+        "wallet", 
+        customerId, 
+        "DEBIT", 
+        customerId, 
+        { amount: totalAmount, reason: `Payment for Order #${orderId}` }
+      ]);
     }
 
     // ── ধাপ ৯: কুপন ব্যবহারের সংখ্যা বৃদ্ধি (Increment coupon usage) ─────────────────────
