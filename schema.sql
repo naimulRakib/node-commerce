@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hOReAMbX4PBueL1nbGhPQVMs3MSXviaycMjQ4aWFDQV99uMcAWkHmKx49gWPCEl
+\restrict vjTpvTOrwQUPVbik6APIa4JiB9bkOH9ooCZjwRDhM1DxG0HfRcGPNQ5bLR9DAKX
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -391,7 +391,9 @@ CREATE TABLE public.customer (
     payment_method character varying(40),
     password_hash character varying(255),
     is_verified boolean DEFAULT false,
-    is_active boolean DEFAULT true
+    is_active boolean DEFAULT true,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
 );
 
 
@@ -2454,5 +2456,5 @@ ALTER TABLE ONLY public.wishlist_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hOReAMbX4PBueL1nbGhPQVMs3MSXviaycMjQ4aWFDQV99uMcAWkHmKx49gWPCEl
+\unrestrict vjTpvTOrwQUPVbik6APIa4JiB9bkOH9ooCZjwRDhM1DxG0HfRcGPNQ5bLR9DAKX
 
