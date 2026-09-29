@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict OevllMGB20OgFVQdenDrj1scxjFmfT1fH9bx7Pf1GkPIqkMwzhB3Q0q5dEu1DBO
+\restrict bNGCwoALeYleVGUsqBCIiZnaWyJ4wPt6ZNv5BC3OvmmBd0paLHsefE5uM2CJ4cu
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -838,7 +838,9 @@ CREATE TABLE public.profile (
     full_name character varying(150),
     present_address character varying(250),
     gender character varying(20),
-    image_url character varying(500)
+    image_url character varying(500),
+    date_of_birth date,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
 );
 
 
@@ -2451,5 +2453,5 @@ ALTER TABLE ONLY public.wishlist_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict OevllMGB20OgFVQdenDrj1scxjFmfT1fH9bx7Pf1GkPIqkMwzhB3Q0q5dEu1DBO
+\unrestrict bNGCwoALeYleVGUsqBCIiZnaWyJ4wPt6ZNv5BC3OvmmBd0paLHsefE5uM2CJ4cu
 
