@@ -4,6 +4,8 @@ import { Metadata } from "next";
 import Link from "next/link";
 // ডাটাবেস সংযোগ।
 import { db } from "@/lib/db";
+// রোল-ভিত্তিক অ্যাক্সেস কন্ট্রোল (RBAC): শুধুমাত্র অ্যাডমিন অ্যাক্সেস নিশ্চিত করতে।
+import { requireAdmin } from "@/lib/auth";
 // অ্যাডমিন-অনলি সার্ভার অ্যাকশন।
 import { createCategoryAction, deleteCategoryAction } from "@/actions/admin";
 
@@ -30,7 +32,9 @@ export const dynamic = "force-dynamic";
 
 // ─── সার্ভার কম্পোনেন্ট (Server Component) ─────────────────────────────────
 export default async function AdminCategoriesPage() {
-
+  // প্রমাণীকরণ যাচাই (Authentication Validation on every page):
+  // অননুমোদিত ব্যবহারকারী এক্সেস করলে /admin/login-এ রিডাইরেক্ট হবে।
+  await requireAdmin();
   // ১. ডেটা ফেচিং: সব ক্যাটাগরি এবং প্রতিটিতে কতটি প্রোডাক্ট আছে তা জানা
   const res = await db.query(`
     SELECT c.*,
@@ -198,10 +202,6 @@ export default async function AdminCategoriesPage() {
                               padding: "4px 10px", borderRadius: 8,
                               background: "rgba(239,68,68,0.08)",
                               border: "1px solid rgba(239,68,68,0.2)",
-                            }}
-                            onClick={(e) => {
-                              // ব্যবহারকারীর কাছে নিশ্চিতকরণ চাওয়া হচ্ছে
-                              if (!confirm(`Delete "${cat.name}"?`)) e.preventDefault();
                             }}
                           >
                             Delete

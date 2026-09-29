@@ -8,12 +8,17 @@ import Link from "next/link";
 import { createProductAction } from "@/actions/admin";
 // সফলভাবে প্রোডাক্ট তৈরির পর রিডাইরেক্ট করার ফাংশন।
 import { redirect } from "next/navigation";
+// রোল-ভিত্তিক অ্যাক্সেস কন্ট্রোল (RBAC): শুধুমাত্র অ্যাডমিন অ্যাক্সেস নিশ্চিত করতে।
+import { requireAdmin } from "@/lib/auth";
 
 // ─── মেটাডেটা (Metadata) ──────────────────────────────────────────────────────────
 export const metadata: Metadata = { title: "Add Product — Admin" };
 
 // ─── সার্ভার কম্পোনেন্ট (Server Component) ──────────────────────────────
 export default async function AdminNewProductPage() {
+  // প্রমাণীকরণ যাচাই (Authentication Validation on every page):
+  // অননুমোদিত ব্যবহারকারী এক্সেস করলে /admin/login-এ রিডাইরেক্ট হবে।
+  await requireAdmin();
   // ১. ডেটা ফেচিং (Data Fetching): 
   // ড্রপডাউনে দেখানোর জন্য ডেটাবেস থেকে সব ক্যাটাগরি ফেচ করা হচ্ছে।
   const res = await db.query('SELECT * FROM category ORDER BY name ASC');
@@ -75,6 +80,12 @@ export default async function AdminNewProductPage() {
                 <option key={c.category_id} value={c.category_id}>{c.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* ছবি (Image URL) */}
+          <div>
+            <label style={labelStyle}>Product Image URL</label>
+            <input name="image_url" style={inputStyle} placeholder="https://example.com/image.jpg" />
           </div>
 
           {/* বর্ণনা (Description) */}

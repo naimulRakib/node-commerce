@@ -2,6 +2,8 @@
 import { Metadata } from "next";
 // ডাটাবেস কানেকশন পুল।
 import { db } from "@/lib/db";
+// রোল-ভিত্তিক অ্যাক্সেস কন্ট্রোল (RBAC): শুধুমাত্র অ্যাডমিন অ্যাক্সেস নিশ্চিত করতে।
+import { requireAdmin } from "@/lib/auth";
 
 // ─── মেটাডেটা (Metadata) ───────────────────────────────────────────────────
 export const metadata: Metadata = { title: "Analytics — Admin" };
@@ -32,6 +34,9 @@ function calcPSS(product: any) {
 
 // ─── মূল পেজ কম্পোনেন্ট (Main Page Component) ─────────────────────────────
 export default async function AnalyticsPage() {
+  // প্রমাণীকরণ যাচাই (Authentication Validation): অননুমোদিত অ্যাক্সেস ব্লক করা হচ্ছে।
+  // requireAdmin() কল ব্যর্থ হলে স্বয়ংক্রিয়ভাবে /admin/login-এ রিডাইরেক্ট হবে।
+  await requireAdmin();
 
   // ১. সব কুয়েরি একসাথে চালানো (Concurrent Queries)
   // Promise.all ব্যবহার করলে সব কুয়েরি একই সময়ে চলে — দ্রুত হয়

@@ -4,12 +4,17 @@ import { Metadata } from "next";
 import Link from "next/link";
 // ডাটাবেস ইন্সট্যান্স (Database Instance), যা র (Raw) SQL চালানোর জন্য ব্যবহৃত হয়।
 import { db } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
 
 // ─── মেটাডেটা (Metadata) ──────────────────────────────────────────────────────────
 export const metadata: Metadata = { title: "Products — Admin" };
 
 // ─── সার্ভার কম্পোনেন্ট (Server Component) ──────────────────────────────
 export default async function AdminProductsPage() {
+  // প্রমাণীকরণ যাচাই (Authentication Validation on every page):
+  // অননুমোদিত ব্যবহারকারী এক্সেস করলে /admin/login-এ রিডাইরেক্ট হবে।
+  await requireAdmin();
+
   // ১. কমপ্লেক্স ডাটাবেস কুয়েরি (Complex Database Query):
   // এটি একটি অত্যন্ত অপ্টিমাইজড কুয়েরি যা N+1 প্রবলেম (N+1 Query Problem) সমাধান করে।
   // প্রোডাক্টের বেস ডেটার পাশাপাশি, সাবকুয়েরি (Subquery) দিয়ে রিভিউ கவுন্ট (Reviews Count) 

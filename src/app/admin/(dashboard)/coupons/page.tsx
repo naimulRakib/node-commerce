@@ -3,6 +3,7 @@ import { Metadata } from "next";
 // ডাটাবেস কোয়েরি চালানোর জন্য ডাটাবেস ইন্সট্যান্স।
 import { db } from "@/lib/db";
 // ক্লায়েন্ট সাইড রেন্ডারিং এবং ইন্টারঅ্যাক্টিভিটির জন্য ক্লায়েন্ট কম্পোনেন্ট ইম্পোর্ট করা হচ্ছে।
+import { requireAdmin } from "@/lib/auth";
 import AdminCouponsClient from "./AdminCouponsClient";
 
 // ─── মেটাডেটা (Metadata) ──────────────────────────────────────────────────────────
@@ -10,6 +11,9 @@ export const metadata: Metadata = { title: "Coupons — Admin" };
 
 // ─── সার্ভার কম্পোনেন্ট (Server Component) ──────────────────────────────
 export default async function AdminCouponsPage() {
+  // প্রমাণীকরণ যাচাই (Authentication Validation on every page):
+  // অননুমোদিত ব্যবহারকারী এক্সেস করলে /admin/login-এ রিডাইরেক্ট হবে।
+  await requireAdmin();
   // ১. ডেটা ফেচিং (Data Fetching): 
   // ডাটাবেস থেকে সব কুপন ফেচ করা হচ্ছে এবং তৈরির সময় (created_at) অনুযায়ী ডিসেন্ডিং (Descending) অর্ডারে সাজানো হচ্ছে।
   const res = await db.query('SELECT * FROM coupon ORDER BY created_at DESC');

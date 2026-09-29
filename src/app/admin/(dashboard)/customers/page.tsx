@@ -2,6 +2,7 @@
 import { Metadata } from "next";
 // ডেটাবেস ইনস্ট্যান্স, কাস্টমার লিস্ট এবং রিলেশনাল ডেটা ফেচ করার জন্য।
 import { db } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
 // পেজিনেশন (Pagination) লিংকের জন্য।
 import Link from "next/link";
 
@@ -10,6 +11,10 @@ export const metadata: Metadata = { title: "Customers — Admin" };
 
 // ─── সার্ভার কম্পোনেন্ট (Server Component) ──────────────────────────────
 export default async function AdminCustomersPage({
+  // প্রমাণীকরণ যাচাই (Authentication Validation on every page):
+  // অননুমোদিত ব্যবহারকারী এক্সেস করলে /admin/login-এ রিডাইরেক্ট হবে।
+  await requireAdmin();
+
   searchParams,
 }: {
   // ডায়নামিক URL প্যারামিটার (Search Params), মূলত পেজিনেশনের জন্য ব্যবহৃত হয়।

@@ -4,12 +4,17 @@ import { Metadata } from "next";
 import { db } from "@/lib/db";
 // ক্লায়েন্ট সাইড রেন্ডারিং এবং ইন্টারঅ্যাক্টিভিটির জন্য ক্লায়েন্ট কম্পোনেন্ট।
 import AdminCouriersClient from "./AdminCouriersClient";
+import { requireAdmin } from "@/lib/auth";
 
 // ─── মেটাডেটা (Metadata) ──────────────────────────────────────────────────────────
 export const metadata: Metadata = { title: "Couriers — Admin" };
 
 // ─── সার্ভার কম্পোনেন্ট (Server Component) ──────────────────────────────
 export default async function AdminCouriersPage() {
+  // প্রমাণীকরণ যাচাই (Authentication Validation on every page):
+  // অননুমোদিত ব্যবহারকারী এক্সেস করলে /admin/login-এ রিডাইরেক্ট হবে।
+  await requireAdmin();
+
   // ১. ডেটা ফেচিং এবং অ্যাগ্রিগেশন (Data Fetching & Aggregation): 
   // সাবকুয়েরি (Subquery) ব্যবহার করে প্রতিটি কুরিয়ারের সাথে সম্পর্কিত 
   // মোট অর্ডারের সংখ্যা (orders_count) বের করা হচ্ছে। 
