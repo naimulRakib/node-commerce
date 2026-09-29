@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict vjTpvTOrwQUPVbik6APIa4JiB9bkOH9ooCZjwRDhM1DxG0HfRcGPNQ5bLR9DAKX
+\restrict QrglJ9jqAi4yjHMPtOts3KNntrBWeI3FvvbEJ07a6KeTrYbVgEg1aebSiLVfSyX
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -299,7 +299,8 @@ CREATE TABLE public.coupon (
     usage_limit integer,
     discount_type character varying(20) DEFAULT 'percentage'::character varying NOT NULL,
     discount_value numeric(10,2) DEFAULT 0 NOT NULL,
-    max_discount numeric(10,2)
+    max_discount numeric(10,2),
+    created_at timestamp without time zone DEFAULT now() NOT NULL
 );
 
 
@@ -2456,5 +2457,5 @@ ALTER TABLE ONLY public.wishlist_item
 -- PostgreSQL database dump complete
 --
 
-\unrestrict vjTpvTOrwQUPVbik6APIa4JiB9bkOH9ooCZjwRDhM1DxG0HfRcGPNQ5bLR9DAKX
+\unrestrict QrglJ9jqAi4yjHMPtOts3KNntrBWeI3FvvbEJ07a6KeTrYbVgEg1aebSiLVfSyX
 
