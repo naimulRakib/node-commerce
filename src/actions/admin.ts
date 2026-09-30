@@ -66,9 +66,11 @@ export async function adminLogoutAction() {
 export async function confirmOrderAction(orderId: number): Promise<{ error?: string }> {
   // ১. অ্যাক্সেস কন্ট্রোল: রিকোয়েস্টকারী বৈধ অ্যাডমিন কিনা যাচাই।
   const admin = await requireAdmin();
+  console.log("[DEBUG] confirmOrderAction called for orderId:", orderId, "by admin:", admin.id);
   
   // ২. ট্রানজ্যাকশন কল (Transaction Call): ডাটাবেসে স্ট্যাটাস আপডেট করা।
   const result = await updateOrderStatus(orderId, "confirmed", admin.id);
+  console.log("[DEBUG] updateOrderStatus result:", result);
   if (!result.success) return { error: result.error };
 
   // ৩. কাস্টমার নোটিফিকেশন (Customer Notification): 
@@ -195,6 +197,7 @@ export async function createProductAction(formData: FormData): Promise<{ error?:
   const description = formData.get("description") as string;
   const base_price = Number(formData.get("base_price"));
   const category_id = formData.get("category_id") ? Number(formData.get("category_id")) : undefined;
+  const image_url = formData.get("image_url") as string;
 
   // ২. ইনপুট ভ্যালিডেশন
   if (!name || !product_code || !base_price) {
@@ -204,8 +207,8 @@ export async function createProductAction(formData: FormData): Promise<{ error?:
   try {
     // ৩. ডেটাবেস ইনসার্ট (Database Insert) এবং `RETURNING` ক্লজ ব্যবহার করে নতুন আইডি (ID) নিয়ে আসা।
     const res = await db.query(
-      'INSERT INTO product (name, product_code, description, base_price, category_id) VALUES ($1, $2, $3, $4, $5) RETURNING product_id',
-      [name, product_code, description || null, base_price, category_id || null]
+      'INSERT INTO product (name, product_code, description, base_price, price, category_id, image_url) VALUES ($1, $2, $3, $4, $4, $5, $6) RETURNING product_id',
+      [name, product_code, description || null, base_price, category_id || null, image_url || null]
     );
     const product = res.rows[0];
     
@@ -230,18 +233,42 @@ export async function updateProductAction(
   const base_price = Number(formData.get("base_price"));
   const is_active = formData.get("is_active") === "on";
   const category_id = formData.get("category_id") ? Number(formData.get("category_id")) : undefined;
+  
+  const stock_qty = Number(formData.get("stock_qty") || 0);
 
-  // ডেটাবেস মিউটেশন (Mutation)
-  await db.query(
-    'UPDATE product SET name = $1, description = $2, base_price = $3, is_active = $4, category_id = $5, updated_at = NOW() WHERE product_id = $6',
-    [name, description || null, base_price, is_active, category_id || null, productId]
-  );
+  try {
+    // ডেটাবেস মিউটেশন (Mutation)
+    await db.query(
+      'UPDATE product SET name = $1, description = $2, base_price = $3, is_active = $4, category_id = $5, stock_qty = $6, updated_at = NOW() WHERE product_id = $7',
+      [name, description || null, base_price, is_active, category_id || null, stock_qty, productId]
+    );
+
+    // ভ্যারিয়েন্ট স্টক আপডেট (Variant Stock Updates)
+    const variantUpdates: Promise<any>[] = [];
+    formData.forEach((value, key) => {
+      if (key.startsWith("variant_qty_")) {
+        const variantCode = key.replace("variant_qty_", "");
+        const qty = Number(value);
+        variantUpdates.push(
+          db.query('UPDATE product_variant SET quantity = $1 WHERE product_id = $2 AND variant_code = $3', [qty, productId, variantCode])
+        );
+      }
+    });
+
+    if (variantUpdates.length > 0) {
+      await Promise.all(variantUpdates);
+    }
+  } catch (error) {
+    console.error("Failed to update product:", error);
+    return { error: "Failed to update product" };
+  }
 
   // একাধিক পেজের ক্যাশ ইনভ্যালিডেট করা হচ্ছে।
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${productId}/edit`);
   revalidatePath("/products");
-  return {};
+  // সেভ সফল হলে একই পেজে ফিরে যাওয়া (refresh effect)
+  redirect(`/admin/products/${productId}/edit`);
 }
 
 // ─── কুপন তৈরি করা (Create Coupon) ────────────────────────────────────────────
@@ -262,8 +289,8 @@ export async function createCouponAction(formData: FormData): Promise<{ error?: 
 
   try {
     await db.query(
-      'INSERT INTO coupon (code, discount_type, discount_value, min_spend, max_discount, expiry_date, usage_limit) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [code, discount_type, discount_value, min_spend, max_discount || null, expiry_date || null, usage_limit || null]
+      'INSERT INTO coupon (code, discount_type, discount_value, min_spend, max_discount, expiry_date, usage_limit, discount_pt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [code, discount_type, discount_value, min_spend, max_discount || null, expiry_date || null, usage_limit || null, discount_type === 'percentage' ? discount_value : 0]
     );
     revalidatePath("/admin/coupons");
     return {};
